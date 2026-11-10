@@ -67,6 +67,7 @@ window.__ModuleLoader__.load({
         'hosts.required': 'Имя и SSH-узел обязательны.',
         'hosts.duplicate': 'Имя {name} уже занято.',
         'hosts.allowNone': 'Ни одной ВМ не разрешено',
+        'hosts.allowVmidsHint': 'Список этого узла. Пусто — наследуется общий список; чтобы запретить всё, оставьте пустым и общий.',
         'hosts.legacy': 'Один узел, старый формат',
         'hosts.global': 'Общие настройки',
         'field.sshHost': 'Узел Proxmox',
@@ -171,6 +172,7 @@ window.__ModuleLoader__.load({
         'hosts.required': 'A name and an SSH host are required.',
         'hosts.duplicate': 'The name {name} is already taken.',
         'hosts.allowNone': 'No VM is allowed',
+        'hosts.allowVmidsHint': 'This host\'s list. Empty — inherits the global list; to forbid everything, leave the global list empty too.',
         'hosts.legacy': 'One host, legacy form',
         'hosts.global': 'Global settings',
         'field.sshHost': 'Proxmox host',
@@ -275,6 +277,7 @@ window.__ModuleLoader__.load({
         'hosts.required': '名称和 SSH 主机不能为空。',
         'hosts.duplicate': '名称 {name} 已被占用。',
         'hosts.allowNone': '未允许任何虚拟机',
+        'hosts.allowVmidsHint': '仅作用于这台主机。留空——继承全局列表；要全部禁止，全局列表也要留空。',
         'hosts.legacy': '单机配置（旧格式）',
         'hosts.global': '全局设置',
         'field.sshHost': 'Proxmox 主机',
@@ -363,7 +366,7 @@ window.__ModuleLoader__.load({
       { name: 'sshKeyPath', kind: 'text', labelKey: 'field.sshKeyPath', hintKey: 'field.sshKeyPathHint' },
       { name: 'sshConfigFile', kind: 'text', labelKey: 'field.sshConfigFile', hintKey: 'field.sshConfigFileHint' },
       { name: 'sshExtraOptions', kind: 'list', labelKey: 'field.sshExtraOptions', hintKey: 'field.sshExtraOptionsHint' },
-      { name: 'allowVmids', kind: 'numberList', labelKey: 'field.allowVmids', hintKey: 'field.allowVmidsHint' },
+      { name: 'allowVmids', kind: 'numberList', labelKey: 'field.allowVmids', hintKey: 'hosts.allowVmidsHint' },
       { name: 'description', kind: 'text', labelKey: 'hosts.description', hintKey: 'hosts.descriptionHint' },
     ];
 

@@ -3,7 +3,7 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [0.3.1] — 2026-11-10
+## [0.3.2] — 2026-11-10
 
 ### Changed
 
@@ -14,6 +14,8 @@ All notable changes to this plugin are documented here. The format follows
 * The 0.2.x single-host fields (`sshHost`, `sshUser`, …) are shown only while no host card exists:
   they are the source of the generated `default` entry, and showing both at once would be two
   editors for one host. The rest of the settings sit under a **Global settings** heading.
+* A card's allow-list hint now says what the code does: an empty per-host list inherits the global
+  list, and only an empty global list forbids everything.
 
 ## [0.3.0] — 2026-11-10
 
