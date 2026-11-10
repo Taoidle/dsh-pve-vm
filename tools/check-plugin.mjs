@@ -13,6 +13,8 @@
  */
 import fs from 'node:fs';
 import process from 'node:process';
+// The harness patches schemastery; a bare checkout needs the shim before config.js.
+import './volatile-shim.mjs';
 
 /**
  * Where the harness packages live. Run from inside a profile, the bare import below
@@ -45,6 +47,9 @@ function live(value) {
 
 const problems = [];
 const note = (message) => problems.push(message);
+// Environment limits of a bare checkout: worth printing, but not a defect of the plugin.
+const warnings = [];
+const warn = (message) => warnings.push(message);
 
 const { assertSupportedJsonSchema, defineTool } = await loadCompiler();
 const plugin = await import('../index.js');
@@ -55,6 +60,20 @@ if (typeof plugin.apply !== 'function') note('index.js does not export apply');
 
 const registered = [];
 const configValues = {
+  instances: [
+    {
+      name: 'lab',
+      sshHost: '10.0.0.11',
+      sshUser: 'root',
+      sshPort: 22,
+      sshKeyPath: '',
+      sshConfigFile: '',
+      sshExtraOptions: [],
+      allowVmids: [4242],
+      description: '',
+    },
+  ],
+  defaultInstance: 'lab',
   sshHost: 'proxmox',
   sshUser: 'root',
   sshPort: 22,
@@ -163,7 +182,9 @@ try {
   const wild = resolveSettings({ viewFps: 99, viewScale: 0 });
   if (wild.view.fps !== 4 || wild.view.scale !== 1) note(`resolveSettings: panel bounds are not honoured (${wild.view.fps}/${wild.view.scale})`);
   // The settings service hands `.volatile()` fields out as live references even on a direct schema call.
-  if (resolved.sshHost?.get?.() !== 'proxmox') note('Config: sshHost was not applied');
+  // With the harness patch the value is a live reference; the shim keeps it plain.
+  const appliedHost = resolved.sshHost?.get?.() ?? resolved.sshHost;
+  if (appliedHost !== 'proxmox') note(`Config: sshHost was not applied (${appliedHost})`);
 } catch (error) {
   note(`settings check threw: ${error.stack ?? error}`);
 }
@@ -298,7 +319,7 @@ if (shapes.size > 1) {
 try {
   const { readPluginMeta } = await import(`${DSH_PACKAGES}/dsh-app-boot/lib/index.js`);
   if (typeof readPluginMeta !== 'function') {
-    note('this dsh has no readPluginMeta — the card metadata cannot be verified');
+    warn('this dsh has no readPluginMeta — the card metadata cannot be verified here');
   } else {
     const manifestUrl = new URL('../package.json', import.meta.url);
     const manifest = JSON.parse(fs.readFileSync(manifestUrl, 'utf8'));
@@ -317,13 +338,14 @@ try {
     }
   }
 } catch (error) {
-  note(`the live metadata check could not run: ${error?.message ?? error}`);
+  warn(`the live metadata check could not run: ${error?.message ?? error}`);
 }
 
 const summary = {
   tools: registered.map((definition) => definition.name),
   count: registered.length,
   problems,
+  ...(warnings.length > 0 ? { warnings } : {}),
 };
 process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
 process.exit(problems.length === 0 ? 0 : 1);

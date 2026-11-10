@@ -3,6 +3,40 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.3.0] — 2026-11-10
+
+### Added
+
+* **Several Proxmox VE hosts from one plugin.** The settings gained an `instances` list — `name`,
+  `sshHost`/`sshUser`/`sshPort`/`sshKeyPath`/`sshConfigFile`/`sshExtraOptions`, a per-instance
+  `allowVmids` and a free-form `description` — plus `defaultInstance`. Every tool takes an optional
+  `instance` argument; without it the call lands on `defaultInstance`, or on the first entry when
+  that is empty. An unknown name fails with `BAD_INSTANCE` and lists the configured hosts, and each
+  tool result carries the `instance` it came from, so an answer is never ambiguous.
+* **`vm_status` without a `vmid` now answers with the inventory** of every configured host: its
+  endpoint, its allow-list and the live consoles on it.
+* **The "VM screen" panel has a host selector** when more than one host is configured, and the panel
+  state, frames and releases are per instance. A stale instance name from a previous configuration
+  falls back to the default instead of blanking the panel.
+
+### Changed
+
+* **Isolation is structural, not a naming convention.** Each host gets its own controller — its own
+  console sessions, guest-agent OS and code-page caches, and `qm` queues — because all of that state
+  is keyed by a bare vmid, and VM 100 on two nodes is two different machines. `vm_exec`, the console
+  tools and the panel therefore cannot mix two hosts' sessions.
+* **`allowVmids` is decided per host.** An entry with an empty list inherits the top-level list; a VM
+  id allowed on one host is not allowed on another.
+* **A 0.2.x configuration keeps working unchanged.** With no `instances`, the host described by the
+  top-level ssh fields becomes the single instance `default`, and the ssh and `allowVmids` fields are
+  still read on their own — the plugin only ever needs `instances` when there is more than one host.
+
+### Notes
+
+* One instance is one ssh transport. In a Proxmox cluster, point an entry at the node that owns the
+  VM (`qm vncproxy` and the guest agent are node-local); a VM that migrates is not followed
+  automatically. Add one entry per node you want to reach.
+
 ## [0.2.5] — 2026-10-23
 
 ### Fixed

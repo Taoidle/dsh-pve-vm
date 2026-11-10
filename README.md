@@ -87,6 +87,11 @@ layer, and the same values can be edited there by hand:
 - id: pve-vm
   name: dsh-pve-vm
   config:
+    # Several PVE hosts: one entry per host, each with its own ssh endpoint and
+    # its own VM ids. An empty list means "one host, described by the ssh fields
+    # below" — a 0.2.x configuration keeps working untouched.
+    instances: []
+    defaultInstance: ''         # the host a tool call lands on when it names none
     sshHost: proxmox            # alias from ~/.ssh/config, or an address
     sshUser: root
     sshPort: 22
@@ -117,7 +122,48 @@ layer, and the same values can be edited there by hand:
 4. Call `vm_status` — it reports whether the VM is allowed, whether the guest agent answers, which
    guest OS was detected, and whether a console session is open.
 
+### Several PVE hosts
+
+One plugin instance can drive several independent Proxmox VE hosts. Add them to `instances`, each
+with its own ssh endpoint and its own allow-list:
+
+```yaml
+- id: pve-vm
+  name: dsh-pve-vm
+  config:
+    defaultInstance: lab
+    allowVmids: []              # global list; an instance with an empty list inherits it
+    instances:
+      - name: lab               # the `instance` argument of every tool
+        sshHost: 10.0.0.11      # an address, or an alias from ~/.ssh/config
+        sshUser: root
+        sshKeyPath: ~/.ssh/lab_ed25519
+        allowVmids: [100, 101]
+        description: the lab cluster, node pve1
+      - name: office
+        sshHost: office-pve
+        allowVmids: [200]
+```
+
+* Every tool takes an optional `instance`. Without it, the call lands on `defaultInstance`, or on
+  the first entry of the list when that is empty. An unknown name fails with `BAD_INSTANCE` and
+  lists the configured ones.
+* `allowVmids` is decided **per host**. An entry with an empty list inherits the top-level
+  `allowVmids`; a VM id allowed on one host is not allowed on another.
+* The entries are isolated, not just labelled: each host gets its own controllers, console
+  sessions, guest-agent caches and `qm` queues, so VM 100 on two nodes is two different machines.
+* The **VM screen** panel grows a host selector when more than one entry is configured, and
+  `vm_status` without a `vmid` answers with the inventory — every host, its endpoint and its
+  allow-list.
+* **In a cluster, point each entry at the node that owns the VM.** `qm vncproxy` and the guest agent
+  are node-local, so a single ssh transport cannot reach VMs of different nodes; add one entry per
+  node (or per host) you want to reach. Host-level clustering and migration are not followed
+  automatically — a moved VM must be reachable through the entry you name.
+
 ## Tools
+
+Every tool also takes `instance` — the name of a configured PVE host. It is optional; omit it for
+the default one.
 
 ### Console (VNC)
 
@@ -265,7 +311,10 @@ This plugin gives an agent **root-level hands inside your VMs**. Be deliberate a
   `console_type` works.
 * One console session per VM id, serialized with a mutex; the session is closed on idle.
 * The console tools do not work with a serial console (`vga: serialN`) — there is no framebuffer.
-* Not yet verified: Proxmox VE 7 and 9, multi-node clusters, Linux guests with Wayland-only desktops.
+* Several PVE hosts are supported as separate entries, but each entry has **one ssh transport**: in
+  a cluster, point it at the node that owns the VM. Migration and cross-node lookup are not followed.
+* Not yet verified: Proxmox VE 7 and 9, Linux guests with Wayland-only desktops, several hosts behind
+  a Proxmox cluster API (only per-node ssh is used).
 
 ## Development
 

@@ -9,6 +9,7 @@ import { textToSendkeys } from '../lib/hmp.js';
 import { planTyping } from '../lib/keys.js';
 import { encodePng } from '../lib/png.js';
 import { VmError } from '../lib/session.js';
+import { instanceOf, withInstance } from '../lib/instances.js';
 import { decodeGuestBytes } from '../lib/ssh.js';
 import {
   MAX_FILE_BYTES,
@@ -86,12 +87,10 @@ function describeExec(value) {
 
 /**
  * Build the guest agent tool definitions.
- * @param {{controller: object, settings: () => object}} deps
+ * @param {{pool: object, settings: () => object}} deps
  * @returns {object[]} definitions for `ctx.tools.register`.
  */
 export function guestTools(deps) {
-  const { controller } = deps;
-
   return [
     {
       name: 'vm_exec',
@@ -123,6 +122,7 @@ export function guestTools(deps) {
       },
       timeoutMs: 600000,
       async execute(args, exec) {
+        const { controller } = instanceOf(deps, args);
         const given = Array.isArray(args.argv) && args.argv.length > 0 ? args.argv.map(String) : null;
         const command = typeof args.command === 'string' && args.command.length > 0 ? args.command : null;
         if (!given && !command) throw new VmError('either command or a non-empty argv is required', 'BAD_ARGS');
@@ -226,6 +226,7 @@ export function guestTools(deps) {
       },
       timeoutMs: 300000,
       async execute(args, exec) {
+        const { controller } = instanceOf(deps, args);
         const maxBytes = Math.max(1, Math.min(MAX_FILE_BYTES, Number(args.maxBytes ?? 262144)));
         const family = await controller.guestOs(args.vmid, { signal: exec?.signal });
         const readArgv = (offset, size, nonce) => {
@@ -339,6 +340,7 @@ export function guestTools(deps) {
       },
       timeoutMs: 300000,
       async execute(args, exec) {
+        const { controller } = instanceOf(deps, args);
         const data =
           typeof args.dataBase64 === 'string' && args.dataBase64.length > 0
             ? Buffer.from(args.dataBase64.replace(/\s+/g, ''), 'base64')
@@ -414,6 +416,7 @@ export function guestTools(deps) {
       },
       timeoutMs: 300000,
       async execute(args, exec) {
+        const { controller } = instanceOf(deps, args);
         const text = String(args.text ?? '');
         if (text.length === 0) throw new VmError('empty text', 'BAD_ARGS');
         const ascii = /^[\x20-\x7e\r\n\t]*$/.test(text);
@@ -503,6 +506,9 @@ export function guestTools(deps) {
       output: {
         schema: STATUS_SCHEMA,
         render: (args, value) => {
+          // The inventory answer (no vmid): the configured hosts and their live
+          // consoles, without a "the agent does not respond" line for VM 0.
+          if (value.vmid === 0) return textOutput(value.config ?? 'no instances');
           if (!value.allowed) {
             return textOutput(`VM ${value.vmid}: not in allowVmids — the plugin does not work with it`);
           }
@@ -521,17 +527,49 @@ export function guestTools(deps) {
       },
       timeoutMs: 120000,
       async execute(args, exec) {
+        const { controller } = instanceOf(deps, args);
         if (args.vmid !== undefined) return controller.status(args.vmid, { signal: exec?.signal });
+        // No vmid: the inventory of hosts. With several instances this is the
+        // first thing to look at, because the allow list and the live consoles
+        // are now per host.
         const settings = deps.settings();
+        const instances = settings.instances.map((entry) => {
+          const sessions = deps.pool
+            .target(entry.name)
+            .controller.listSessions()
+            .filter((session) => session.alive)
+            .map((session) => session.vmid);
+          return {
+            name: entry.name,
+            host: entry.ssh.host,
+            user: entry.ssh.user,
+            port: entry.ssh.port,
+            allowVmids: entry.allowVmids,
+            sessions,
+          };
+        });
+        const lines = instances.map(
+          (entry) =>
+            `${entry.name}${entry.name === settings.defaultInstance ? ' (default)' : ''}: ` +
+            `${entry.user}@${entry.host}:${entry.port}; ` +
+            `allowVmids: ${entry.allowVmids.join(', ') || 'empty'}; ` +
+            `live consoles: ${entry.sessions.join(', ') || 'none'}`,
+        );
         return {
           vmid: 0,
           allowed: true,
-          sessions: controller.listSessions(),
-          config: `allowVmids: ${settings.allowVmids.join(', ') || 'empty'}; console: ${settings.enableConsole ? 'on' : 'off'}; agent: ${settings.enableGuest ? 'on' : 'off'}`,
+          sessions: instances.flatMap((entry) => entry.sessions.map((vmid) => ({ instance: entry.name, vmid }))),
+          instances,
+          config: [
+            ...lines,
+            `console tools: ${settings.enableConsole ? 'on' : 'off'}; guest agent tools: ${settings.enableGuest ? 'on' : 'off'}`,
+          ].join('\n'),
         };
       },
     },
-  ].map((options) => defineTool(options));
+  ]
+    .map(withInstance(deps))
+    .map((options) => defineTool(options));
 }
 
 /** Whether the content looks like UTF-8 text. */

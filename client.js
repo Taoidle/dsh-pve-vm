@@ -48,6 +48,11 @@ window.__ModuleLoader__.load({
         overridden: 'изменено',
         saveFailed: 'Не сохранилось',
         saved: 'Сохранено',
+        'field.instances': 'Другие узлы PVE',
+        'field.instancesHint':
+          'JSON-список хостов: [{"name":"lab","sshHost":"10.0.0.11","allowVmids":[100]}]. Пусто — один узел из полей ниже.',
+        'field.defaultInstance': 'Узел по умолчанию',
+        'field.defaultInstanceHint': 'Имя из списка выше; пусто — первый в списке.',
         'field.sshHost': 'Узел Proxmox',
         'field.sshHostHint': 'Алиас из ~/.ssh/config или адрес',
         'field.sshUser': 'Пользователь ssh',
@@ -113,6 +118,7 @@ window.__ModuleLoader__.load({
         'view.bytes': '{kb} КБ',
         'view.hostError': 'хост ответил ошибкой: {message}',
         'view.noHost': 'нет связи с хостом: {message}',
+        'view.instance': 'узел',
         'view.agentVm': 'агент работал с ВМ {vmid}',
       },
       en: {
@@ -128,6 +134,11 @@ window.__ModuleLoader__.load({
         overridden: 'overridden',
         saveFailed: 'Not saved',
         saved: 'Saved',
+        'field.instances': 'Additional PVE hosts',
+        'field.instancesHint':
+          'A JSON list of hosts: [{"name":"lab","sshHost":"10.0.0.11","allowVmids":[100]}]. Empty — the single host from the fields below.',
+        'field.defaultInstance': 'Default host',
+        'field.defaultInstanceHint': 'A name from the list above; empty — the first entry.',
         'field.sshHost': 'Proxmox host',
         'field.sshHostHint': 'Alias from ~/.ssh/config, or an address',
         'field.sshUser': 'SSH user',
@@ -193,6 +204,7 @@ window.__ModuleLoader__.load({
         'view.bytes': '{kb} KB',
         'view.hostError': 'the host answered with an error: {message}',
         'view.noHost': 'no connection to the host: {message}',
+        'view.instance': 'host',
         'view.agentVm': 'the agent worked with VM {vmid}',
       },
       zh: {
@@ -208,6 +220,11 @@ window.__ModuleLoader__.load({
         overridden: '已修改',
         saveFailed: '未保存',
         saved: '已保存',
+        'field.instances': '其他 PVE 主机',
+        'field.instancesHint':
+          'JSON 主机列表：[{"name":"lab","sshHost":"10.0.0.11","allowVmids":[100]}]。留空——使用下方字段的单一主机。',
+        'field.defaultInstance': '默认主机',
+        'field.defaultInstanceHint': '上方列表中的名称；留空——第一项。',
         'field.sshHost': 'Proxmox 主机',
         'field.sshHostHint': '~/.ssh/config 中的别名或地址',
         'field.sshUser': 'SSH 用户',
@@ -271,6 +288,7 @@ window.__ModuleLoader__.load({
         'view.bytes': '{kb} KB',
         'view.hostError': '主机返回错误：{message}',
         'view.noHost': '无法连接主机：{message}',
+        'view.instance': '主机',
         'view.agentVm': '智能体操作过虚拟机 {vmid}',
       },
     };
@@ -284,6 +302,8 @@ window.__ModuleLoader__.load({
 
     /** Card fields: setting name, input kind and dictionary keys. */
     const FIELDS = [
+      { name: 'defaultInstance', kind: 'text', hintKey: 'field.defaultInstanceHint' },
+      { name: 'instances', kind: 'json', hintKey: 'field.instancesHint' },
       { name: 'sshHost', kind: 'text' },
       { name: 'sshUser', kind: 'text' },
       { name: 'sshPort', kind: 'number' },
@@ -350,6 +370,16 @@ window.__ModuleLoader__.load({
 
     /** Field value to its input representation. */
     function toInput(field, value) {
+      // The instance list is an array of objects: a textarea with JSON is the only
+      // shape the card can edit without a per-row editor, and it keeps the whole
+      // entry (including fields this build does not know) intact.
+      if (field.kind === 'json') {
+        try {
+          return JSON.stringify(value ?? [], null, 2);
+        } catch {
+          return '';
+        }
+      }
       if (field.kind === 'list' || field.kind === 'numberList') return Array.isArray(value) ? value.join(', ') : '';
       if (value === undefined || value === null) return '';
       return String(value);
@@ -357,6 +387,16 @@ window.__ModuleLoader__.load({
 
     /** Input to a setting value; undefined means "leave it alone". */
     function fromInput(field, text) {
+      if (field.kind === 'json') {
+        try {
+          const parsed = JSON.parse(text);
+          return Array.isArray(parsed) ? parsed : undefined;
+        } catch {
+          // Invalid JSON stays in the textarea: nothing is written, and the next
+          // blur retries. The service validates the schema after that.
+          return undefined;
+        }
+      }
       if (field.kind === 'number') {
         const parsed = Number(text.trim());
         return Number.isFinite(parsed) ? parsed : undefined;
@@ -624,6 +664,7 @@ window.__ModuleLoader__.load({
       const [stateError, setStateError] = React.useState(null);
       const [follow, setFollow] = React.useState(null);
       const [manualVmid, setManualVmid] = React.useState(null);
+      const [instance, setInstance] = React.useState(null);
       const [streaming, setStreaming] = React.useState(true);
       const [fps, setFps] = React.useState(null);
       const [scale, setScale] = React.useState(null);
@@ -648,7 +689,8 @@ window.__ModuleLoader__.load({
         let timer;
         const poll = async () => {
           try {
-            const response = await fetch(`${VIEW_BASE}/state`, {
+            const query = instance === null ? '' : `?instance=${encodeURIComponent(instance)}`;
+            const response = await fetch(`${VIEW_BASE}/state${query}`, {
               headers: { accept: 'application/json' },
               cache: 'no-store',
             });
@@ -671,12 +713,14 @@ window.__ModuleLoader__.load({
           cancelled = true;
           clearTimeout(timer);
         };
-      }, [visible]);
+      }, [visible, instance]);
 
       const followAgent = follow ?? settings.followAgent;
       const fpsEff = fps ?? settings.fps;
       const scaleEff = scale ?? settings.scale;
       const allowed = Array.isArray(state?.allowed) ? state.allowed : [];
+      const instances = Array.isArray(state?.instances) ? state.instances : [];
+      const instanceEff = state?.instance ?? instance ?? null;
       const lastVmid = state?.last?.vmid ?? null;
       const preferred = followAgent ? lastVmid : manualVmid;
       const vmid = allowed.includes(preferred)
@@ -695,7 +739,8 @@ window.__ModuleLoader__.load({
         const step = async () => {
           const started = Date.now();
           try {
-            const response = await fetch(`${VIEW_BASE}/frame?vmid=${vmid}&scale=${scaleEff}&cursor=1`, {
+            const host = instanceEff === null ? '' : `&instance=${encodeURIComponent(instanceEff)}`;
+            const response = await fetch(`${VIEW_BASE}/frame?vmid=${vmid}&scale=${scaleEff}&cursor=1${host}`, {
               cache: 'no-store',
             });
             if (!response.ok) {
@@ -723,7 +768,7 @@ window.__ModuleLoader__.load({
           cancelled = true;
           clearTimeout(timer);
         };
-      }, [visible, streaming, vmid, scaleEff, fpsEff, tick]);
+      }, [visible, streaming, vmid, scaleEff, fpsEff, tick, instanceEff]);
 
       // The last frame lives in a blob URL: it must be released when the panel unloads.
       React.useEffect(
@@ -739,7 +784,7 @@ window.__ModuleLoader__.load({
           const response = await fetch(`${VIEW_BASE}/release`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ vmid }),
+            body: JSON.stringify({ vmid, instance: instanceEff }),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           setNote(t('view.released'));
@@ -805,6 +850,27 @@ window.__ModuleLoader__.load({
           jsxs('div', {
             className: 'pve-vm-view-head',
             children: [
+              // With one host there is nothing to choose; the selector appears only
+              // when the settings list more than one instance.
+              instances.length > 1
+                ? jsx('select', {
+                    className: 'pve-vm-select',
+                    value: String(instanceEff ?? ''),
+                    title: t('view.instance'),
+                    onChange: (event) => {
+                      setInstance(event.target.value);
+                      setManualVmid(null);
+                      setState(null);
+                    },
+                    children: instances.map((entry) =>
+                      jsx(
+                        'option',
+                        { value: entry.name, children: entry.host ? `${entry.name} · ${entry.host}` : entry.name },
+                        entry.name,
+                      ),
+                    ),
+                  })
+                : null,
               ...chips,
               lastVmid !== null
                 ? jsx('span', { className: 'pve-vm-line', children: t('view.agentVm', { vmid: String(lastVmid) }) })

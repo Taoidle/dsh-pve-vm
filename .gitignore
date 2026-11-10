@@ -1,4 +1,6 @@
 node_modules/
+# A checkout may link node_modules to an installed profile (tools/check-*.mjs need @deepseek-ai).
+node_modules
 *.log
 
 # Output of the live probes: frames are run artifacts, not sources.

@@ -7,6 +7,7 @@ import { encodeText, parseCombo } from '../lib/keys.js';
 import { comboToSendkey, textToSendkeys } from '../lib/hmp.js';
 import { planTyping } from '../lib/keys.js';
 import { VmError } from '../lib/session.js';
+import { instanceOf, withInstance } from '../lib/instances.js';
 
 const BUTTONS = ['left', 'middle', 'right'];
 
@@ -345,14 +346,17 @@ async function applyAction(client, action, context) {
 
 /**
  * Build the console tool definitions.
- * @param {{controller: object, attachments: object, settings: () => object}} deps
+ * @param {{pool: object, attachments: object, settings: () => object}} deps
  * @returns {object[]} definitions for `ctx.tools.register`.
  */
 export function consoleTools(deps) {
-  const { controller, attachments } = deps;
+  const { attachments } = deps;
 
-  /** Observation after an action: a frame or a text response. */
-  async function afterAction(vmid, label, params, actions) {
+  /**
+   * Observation after an action: a frame or a text response.
+   * @param {object} controller the controller of the instance the action ran on.
+   */
+  async function afterAction(controller, vmid, label, params, actions) {
     const observe = params.observe !== false;
     if (!observe) {
       return { value: { vmid, ok: true, actions }, text: `${label} — done on VM ${vmid}` };
@@ -411,6 +415,7 @@ export function consoleTools(deps) {
       output: { schema: SHOT_SCHEMA, render: (args, value) => shotOutput(value) },
       timeoutMs: 120000,
       async execute(args, exec) {
+        const { controller } = instanceOf(deps, args);
         return capture(controller, attachments, {
           vmid: args.vmid,
           region: args.region,
@@ -434,11 +439,12 @@ export function consoleTools(deps) {
       output: observeOutput,
       timeoutMs: 120000,
       async execute(args) {
+        const { controller } = instanceOf(deps, args);
         const label = `move(${args.x},${args.y})`;
         await controller.withConsole(args.vmid, async (client) => {
           client.pointerEvent(args.x, args.y, 0);
         });
-        const outcome = await afterAction(args.vmid, label, args, [label]);
+        const outcome = await afterAction(controller, args.vmid, label, args, [label]);
         return outcome.value;
       },
     },
@@ -458,13 +464,14 @@ export function consoleTools(deps) {
       output: observeOutput,
       timeoutMs: 120000,
       async execute(args) {
+        const { controller } = instanceOf(deps, args);
         const label = `click(${args.x},${args.y}${args.count && args.count > 1 ? ` x${args.count}` : ''})`;
         await controller.withConsole(args.vmid, async (client) => {
           client.pointerEvent(args.x, args.y, 0);
           await sleep(60);
           await client.click({ button: args.button ?? 'left', count: args.count ?? 1 });
         });
-        const outcome = await afterAction(args.vmid, label, args, [label]);
+        const outcome = await afterAction(controller, args.vmid, label, args, [label]);
         return outcome.value;
       },
     },
@@ -483,11 +490,12 @@ export function consoleTools(deps) {
       output: observeOutput,
       timeoutMs: 120000,
       async execute(args) {
+        const { controller } = instanceOf(deps, args);
         const label = `drag(${args.fromX},${args.fromY}→${args.toX},${args.toY})`;
         await controller.withConsole(args.vmid, async (client) => {
           await client.drag({ x: args.fromX, y: args.fromY }, { x: args.toX, y: args.toY }, { button: args.button ?? 'left' });
         });
-        const outcome = await afterAction(args.vmid, label, args, [label]);
+        const outcome = await afterAction(controller, args.vmid, label, args, [label]);
         return outcome.value;
       },
     },
@@ -504,12 +512,13 @@ export function consoleTools(deps) {
       output: observeOutput,
       timeoutMs: 120000,
       async execute(args) {
+        const { controller } = instanceOf(deps, args);
         const label = `scroll(${args.x},${args.y},${args.delta})`;
         await controller.withConsole(args.vmid, async (client) => {
           client.pointerEvent(args.x, args.y, 0);
           await client.scroll(args.delta);
         });
-        const outcome = await afterAction(args.vmid, label, args, [label]);
+        const outcome = await afterAction(controller, args.vmid, label, args, [label]);
         return outcome.value;
       },
     },
@@ -529,9 +538,10 @@ export function consoleTools(deps) {
       output: observeOutput,
       timeoutMs: 180000,
       async execute(args) {
+        const { controller } = instanceOf(deps, args);
         const label = `type(${JSON.stringify(args.text)})`;
         const applied = await typeTextVia(controller, deps, args.vmid, args.text);
-        const outcome = await afterAction(args.vmid, `${label} — ${applied.note}`, args, [label]);
+        const outcome = await afterAction(controller, args.vmid, `${label} — ${applied.note}`, args, [label]);
         return outcome.value;
       },
     },
@@ -549,17 +559,18 @@ export function consoleTools(deps) {
       output: observeOutput,
       timeoutMs: 120000,
       async execute(args) {
+        const { controller } = instanceOf(deps, args);
         const label = `key(${args.combo})`;
         if (inputChannel(deps.settings()) === 'hmp') {
           await controller.sendkeys(args.vmid, [comboToSendkey(args.combo)]);
-          const outcome = await afterAction(args.vmid, `${label} — sendkey`, args, [label]);
+          const outcome = await afterAction(controller, args.vmid, `${label} — sendkey`, args, [label]);
           return outcome.value;
         }
         const combo = parseCombo(args.combo);
         await controller.withConsole(args.vmid, async (client) => {
           await client.pressCombo(combo);
         });
-        const outcome = await afterAction(args.vmid, label, args, [label]);
+        const outcome = await afterAction(controller, args.vmid, label, args, [label]);
         return outcome.value;
       },
     },
@@ -582,6 +593,7 @@ export function consoleTools(deps) {
       output: observeOutput,
       timeoutMs: 180000,
       async execute(args, exec) {
+        const { controller } = instanceOf(deps, args);
         const text = String(args.text ?? '');
         if (text.length === 0) throw new VmError('empty text', 'BAD_ARGS');
         const channel = await controller.clipboardChannel(args.vmid);
@@ -607,7 +619,7 @@ export function consoleTools(deps) {
         await pressPasteKeys(controller, args.vmid, args.submit === true);
         const channelName = used === 'guest' ? 'guest agent' : 'VNC';
         const label = `paste(${text.length} characters${args.submit === true ? ' + enter' : ''}; channel ${channelName})`;
-        const outcome = await afterAction(args.vmid, label, args, [label]);
+        const outcome = await afterAction(controller, args.vmid, label, args, [label]);
         return outcome.value;
       },
     },
@@ -645,6 +657,7 @@ export function consoleTools(deps) {
       output: observeOutput,
       timeoutMs: 300000,
       async execute(args) {
+        const { controller } = instanceOf(deps, args);
         const actions = Array.isArray(args.actions) ? args.actions : [];
         if (actions.length === 0) throw new VmError('empty action list', 'BAD_ACTION');
         const done = [];
@@ -652,7 +665,7 @@ export function consoleTools(deps) {
         await controller.withConsole(args.vmid, async (client) => {
           for (const action of actions) done.push(await applyAction(client, action, context));
         });
-        const outcome = await afterAction(args.vmid, 'batch', args, done);
+        const outcome = await afterAction(controller, args.vmid, 'batch', args, done);
         return outcome.value;
       },
     },
@@ -683,6 +696,7 @@ export function consoleTools(deps) {
       },
       timeoutMs: 120000,
       async execute(args, exec) {
+        const { controller } = instanceOf(deps, args);
         const timeoutMs = Math.max(500, Math.min(30000, Number(args.timeoutMs ?? 5000)));
         const channel = await controller.clipboardChannel(args.vmid);
         const guestRead = () =>
@@ -729,10 +743,13 @@ export function consoleTools(deps) {
       },
       output: plainOutput,
       async execute(args) {
+        const { controller } = instanceOf(deps, args);
         controller.assertAllowed(args.vmid, 'console');
         const closed = controller.close(args.vmid);
         return { vmid: Number(args.vmid), ok: true, actions: [closed ? 'session closed' : 'no session'], pointer: { x: 0, y: 0 } };
       },
     },
-  ].map((options) => defineTool(options));
+  ]
+    .map(withInstance(deps))
+    .map((options) => defineTool(options));
 }
