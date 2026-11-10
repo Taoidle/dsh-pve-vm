@@ -187,11 +187,14 @@ await click('Add host');
 check(inputs().length >= 9, `editor: expected at least 9 inputs, got ${inputs().length}`);
 await typeInto(0, 'lab');
 await typeInto(1, '10.0.0.11');
+await typeInto(7, '100，101, 102'); // full-width comma, ASCII comma, space
 await click('Save');
 const firstWrite = writes.find(([key]) => key === 'instances');
 check(firstWrite !== undefined, 'save wrote no instances');
 check(firstWrite?.[1]?.[0]?.name === 'lab' && firstWrite?.[1]?.[0]?.sshHost === '10.0.0.11', `saved entry ${JSON.stringify(firstWrite?.[1]?.[0])}`);
 check(firstWrite?.[1]?.[0]?.sshUser === 'root' && firstWrite?.[1]?.[0]?.sshPort === 22, 'defaults not applied to the entry');
+const allow = firstWrite?.[1]?.[0]?.allowVmids;
+check(Array.isArray(allow) && allow.join(',') === '100,101,102', `allow-list parsed as ${JSON.stringify(allow)}`);
 
 /* 3. validation: a duplicate name is refused and nothing is written. */
 const before = writes.length;

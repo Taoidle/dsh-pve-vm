@@ -3,6 +3,14 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.3.4] — 2026-11-11
+
+### Changed
+
+* **An allow-list accepts the separators people actually type.** `100, 101`, `100，101`, `100、101`,
+  `100; 101`, or one id per line all parse to the same list. Before, only the ASCII comma worked and a
+  full-width comma silently dropped every id — which reads as "the list is empty", not as an error.
+
 ## [0.3.3] — 2026-11-11
 
 ### Changed

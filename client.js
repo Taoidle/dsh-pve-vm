@@ -67,7 +67,7 @@ window.__ModuleLoader__.load({
         'hosts.required': 'Имя и SSH-узел обязательны.',
         'hosts.duplicate': 'Имя {name} уже занято.',
         'hosts.allowNone': 'Ни одной ВМ не разрешено',
-        'hosts.allowVmidsHint': 'Список этого узла. Пусто — наследуется общий список; чтобы запретить всё, оставьте пустым и общий.',
+        'hosts.allowVmidsHint': 'Только для этого узла: идентификаторы ВМ через запятую, например 100, 101. Пусто — наследуется общий список; чтобы запретить всё, оставьте пустым и общий.',
         'hosts.global': 'Общие настройки',
         'field.sshHost': 'Узел Proxmox',
         'field.sshHostHint': 'Алиас из ~/.ssh/config или адрес',
@@ -82,7 +82,7 @@ window.__ModuleLoader__.load({
         'field.sshExtraOptions': 'Доп. опции ssh',
         'field.sshExtraOptionsHint': 'Опции -o, через запятую',
         'field.allowVmids': 'Разрешённые ВМ',
-        'field.allowVmidsHint': 'ВМ, с которыми разрешено работать. Пустой список — запрещено всё.',
+        'field.allowVmidsHint': 'Список, который наследует карточка узла с пустым своим; идентификаторы ВМ через запятую, например 100, 101. Пусто — запрещено всё.',
         'field.enableConsole': 'Инструменты консоли (VNC)',
         'field.enableGuest': 'Инструменты гостевого агента',
         'field.inputChannel': 'Канал ввода текста',
@@ -171,7 +171,7 @@ window.__ModuleLoader__.load({
         'hosts.required': 'A name and an SSH host are required.',
         'hosts.duplicate': 'The name {name} is already taken.',
         'hosts.allowNone': 'No VM is allowed',
-        'hosts.allowVmidsHint': 'This host\'s list. Empty — inherits the global list; to forbid everything, leave the global list empty too.',
+        'hosts.allowVmidsHint': 'This host only: vmid values separated by commas, e.g. 100, 101. Empty — inherits the global list; to forbid everything, leave the global list empty too.',
         'hosts.global': 'Global settings',
         'field.sshHost': 'Proxmox host',
         'field.sshHostHint': 'Alias from ~/.ssh/config, or an address',
@@ -186,7 +186,7 @@ window.__ModuleLoader__.load({
         'field.sshExtraOptions': 'Extra ssh options',
         'field.sshExtraOptionsHint': '-o options, comma separated',
         'field.allowVmids': 'Allowed VMs',
-        'field.allowVmidsHint': 'The list a host card inherits when its own is empty. An empty list forbids everything.',
+        'field.allowVmidsHint': 'The list a host card inherits when its own is empty; vmid values separated by commas, e.g. 100, 101. Empty forbids everything.',
         'field.enableConsole': 'Console tools (VNC)',
         'field.enableGuest': 'Guest-agent tools',
         'field.inputChannel': 'Text input channel',
@@ -275,7 +275,7 @@ window.__ModuleLoader__.load({
         'hosts.required': '名称和 SSH 主机不能为空。',
         'hosts.duplicate': '名称 {name} 已被占用。',
         'hosts.allowNone': '未允许任何虚拟机',
-        'hosts.allowVmidsHint': '仅作用于这台主机。留空——继承全局列表；要全部禁止，全局列表也要留空。',
+        'hosts.allowVmidsHint': '仅作用于这台主机：vmid 用逗号分隔，例如 100, 101。留空——继承全局列表；要全部禁止，全局列表也要留空。',
         'hosts.global': '全局设置',
         'field.sshHost': 'Proxmox 主机',
         'field.sshHostHint': '~/.ssh/config 中的别名或地址',
@@ -290,7 +290,7 @@ window.__ModuleLoader__.load({
         'field.sshExtraOptions': '额外 ssh 选项',
         'field.sshExtraOptionsHint': '-o 选项，逗号分隔',
         'field.allowVmids': '允许的虚拟机',
-        'field.allowVmidsHint': '插件可操作的虚拟机。空列表表示全部禁止。',
+        'field.allowVmidsHint': '主机卡片自身列表为空时继承的名单；vmid 用逗号分隔，例如 100, 101。留空——全部禁止。',
         'field.enableConsole': '控制台工具（VNC）',
         'field.enableGuest': '客户机代理工具',
         'field.inputChannel': '文本输入通道',
@@ -461,9 +461,15 @@ window.__ModuleLoader__.load({
           .filter((part) => part.length > 0);
       }
       if (field.kind === 'numberList') {
+        // Commas are what people type, but a Chinese keyboard produces "，", and a
+        // pasted column of ids arrives one per line. Accept every separator a list
+        // can come with; anything that is not a VM id is dropped rather than
+        // written, because a silently shortened allow-list is a wrong allow-list.
         return text
-          .split(',')
-          .map((part) => Number(part.trim()))
+          .split(/[\s,;\uFF0C\u3001\uFF1B]+/)
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0)
+          .map((part) => Number(part))
           .filter((value) => Number.isInteger(value) && value > 0);
       }
       return text;
