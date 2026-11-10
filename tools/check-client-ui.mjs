@@ -172,6 +172,20 @@ const click = async (text) => {
 };
 const inputs = () => uniq(flatten(nodes).filter((n) => n.type === 'input'));
 const typeInto = async (index, text) => { inputs()[index].props.onChange?.({ target: { value: text } }); await settle(); nodes = root.nodes = root.render(); await settle(); };
+
+// Feed one keystroke at a time, like a person typing. A draft that re-parses on every
+// change drops the separator as soon as it is typed; a raw-text draft keeps it.
+const typeChars = async (index, text) => {
+  let value = inputs()[index].props.value ?? '';
+  for (const char of text) {
+    value += char;
+    inputs()[index].props.onChange?.({ target: { value } });
+    await settle();
+    nodes = root.nodes = root.render();
+    await settle();
+  }
+  return value;
+};
 const texts = () => uniq(flatten(nodes).filter((n) => n.type === 'div' || n.type === 'span')).map(labelOf);
 
 const problems = [];
@@ -187,7 +201,10 @@ await click('Add host');
 check(inputs().length >= 9, `editor: expected at least 9 inputs, got ${inputs().length}`);
 await typeInto(0, 'lab');
 await typeInto(1, '10.0.0.11');
-await typeInto(7, '100，101, 102'); // full-width comma, ASCII comma, space
+// Type it keystroke by keystroke: the full-width comma and the spaces must survive
+// each onChange, not be normalised away before the next character arrives.
+await typeChars(7, '100，101, 102');
+check(inputs()[7].props.value === '100，101, 102', `separator lost while typing: ${JSON.stringify(inputs()[7].props.value)}`);
 await click('Save');
 const firstWrite = writes.find(([key]) => key === 'instances');
 check(firstWrite !== undefined, 'save wrote no instances');
@@ -228,6 +245,15 @@ await typeInto(0, 'lab2');
 await click('Save');
 check(value.instances[0].name === 'lab2', `rename failed: ${JSON.stringify(value.instances)}`);
 check(value.defaultInstance === 'lab2', `default after renaming the default host: ${value.defaultInstance}`);
+
+/* 7. a non-numeric id is refused, not dropped: the draft survives the failed save. */
+const beforeBad = writes.length;
+await click('Edit');
+await typeChars(7, ', abc101');
+check(inputs()[7].props.value.endsWith('abc101'), `draft lost on a bad token: ${JSON.stringify(inputs()[7].props.value)}`);
+await click('Save');
+check(writes.length === beforeBad, 'a bad id was written anyway');
+check(texts().some((text) => text.includes('Not VM ids: abc101')), 'bad-id error not shown');
 
 console.log(JSON.stringify({ problems, writes: writes.map(([key, val]) => [key, Array.isArray(val) ? val.map((entry) => entry.name) : val]) }, null, 2));
 process.exit(problems.length === 0 ? 0 : 1);

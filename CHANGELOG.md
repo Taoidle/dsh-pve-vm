@@ -3,6 +3,21 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.3.5] — 2026-11-11
+
+### Fixed
+
+* **The host-card editor no longer swallows what you type.** Its inputs were re-rendered from
+  the *parsed* value on every keystroke, so `100,` collapsed back to `100` and no separator,
+  space, or letter could ever be entered — only bare digits. The card now keeps the raw text in
+  its draft and converts once on save, exactly like the global rows always did.
+
+### Changed
+
+* An allow-list token that is not a positive vmid now **refuses the save** with an error naming
+  the offending token, instead of being silently dropped (a whitelist that loses an id quietly
+  is a wrong whitelist).
+
 ## [0.3.4] — 2026-11-11
 
 ### Changed

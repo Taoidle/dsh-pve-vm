@@ -66,6 +66,7 @@ window.__ModuleLoader__.load({
         'hosts.cancel': 'Отмена',
         'hosts.required': 'Имя и SSH-узел обязательны.',
         'hosts.duplicate': 'Имя {name} уже занято.',
+        'hosts.badVmids': 'Это не идентификаторы ВМ: {tokens}. Укажите положительные числа через запятую.',
         'hosts.allowNone': 'Ни одной ВМ не разрешено',
         'hosts.allowVmidsHint': 'Только для этого узла: идентификаторы ВМ через запятую, например 100, 101. Пусто — наследуется общий список; чтобы запретить всё, оставьте пустым и общий.',
         'hosts.global': 'Общие настройки',
@@ -170,6 +171,7 @@ window.__ModuleLoader__.load({
         'hosts.cancel': 'Cancel',
         'hosts.required': 'A name and an SSH host are required.',
         'hosts.duplicate': 'The name {name} is already taken.',
+        'hosts.badVmids': 'Not VM ids: {tokens}. Use positive numbers separated by commas.',
         'hosts.allowNone': 'No VM is allowed',
         'hosts.allowVmidsHint': 'This host only: vmid values separated by commas, e.g. 100, 101. Empty — inherits the global list; to forbid everything, leave the global list empty too.',
         'hosts.global': 'Global settings',
@@ -274,6 +276,7 @@ window.__ModuleLoader__.load({
         'hosts.cancel': '取消',
         'hosts.required': '名称和 SSH 主机不能为空。',
         'hosts.duplicate': '名称 {name} 已被占用。',
+        'hosts.badVmids': '这些不是虚拟机编号：{tokens}。请填写正整数，用逗号分隔。',
         'hosts.allowNone': '未允许任何虚拟机',
         'hosts.allowVmidsHint': '仅作用于这台主机：vmid 用逗号分隔，例如 100, 101。留空——继承全局列表；要全部禁止，全局列表也要留空。',
         'hosts.global': '全局设置',
@@ -534,10 +537,12 @@ window.__ModuleLoader__.load({
         setError(null);
       };
 
+      // The draft keeps the RAW text while a field is being typed. Parsing every
+      // keystroke would rewrite "100, " as "100" and eat the separator mid-word;
+      // values are converted once in save().
       const setField = (field, text) => {
-        const value = fromInput(field, text);
         setEditing((state) =>
-          state === null ? state : { ...state, draft: { ...state.draft, [field.name]: value === undefined ? '' : value } },
+          state === null ? state : { ...state, draft: { ...state.draft, [field.name]: text } },
         );
       };
 
@@ -545,8 +550,15 @@ window.__ModuleLoader__.load({
       const save = async () => {
         if (editing === null) return;
         const draft = editing.draft;
-        const name = String(draft.name ?? '').trim();
-        const sshHost = String(draft.sshHost ?? '').trim();
+        // Stored entries hold typed values (arrays, numbers); fields the user touched
+        // hold raw text. Convert the text, pass the rest through unchanged.
+        const typed = {};
+        for (const field of HOST_FIELDS) {
+          const raw = draft[field.name];
+          typed[field.name] = typeof raw === 'string' ? fromInput(field, raw) ?? '' : raw;
+        }
+        const name = String(typed.name ?? '').trim();
+        const sshHost = String(typed.sshHost ?? '').trim();
         if (name.length === 0 || sshHost.length === 0) {
           setError(t('hosts.required'));
           return;
@@ -559,15 +571,31 @@ window.__ModuleLoader__.load({
           return;
         }
         const entry = {
-          ...draft,
+          ...typed,
           name,
           sshHost,
-          sshUser: String(draft.sshUser ?? '').trim() || HOST_DEFAULTS.sshUser,
-          sshPort: Number(draft.sshPort) || HOST_DEFAULTS.sshPort,
-          sshExtraOptions: Array.isArray(draft.sshExtraOptions) ? draft.sshExtraOptions : [],
-          allowVmids: Array.isArray(draft.allowVmids) ? draft.allowVmids : [],
-          description: String(draft.description ?? '').trim(),
+          sshUser: String(typed.sshUser ?? '').trim() || HOST_DEFAULTS.sshUser,
+          sshPort: Number(typed.sshPort) || HOST_DEFAULTS.sshPort,
+          sshExtraOptions: Array.isArray(typed.sshExtraOptions) ? typed.sshExtraOptions : [],
+          allowVmids: Array.isArray(typed.allowVmids) ? typed.allowVmids : [],
+          description: String(typed.description ?? '').trim(),
         };
+        // A whitelist that silently loses an id is a wrong whitelist: refuse the save
+        // and point at the token instead of dropping it.
+        for (const field of HOST_FIELDS) {
+          if (field.kind !== 'numberList') continue;
+          const raw = draft[field.name];
+          if (typeof raw !== 'string') continue;
+          const bad = raw
+            .split(/[\s,;\uFF0C\u3001\uFF1B]+/)
+            .map((part) => part.trim())
+            .filter((part) => part.length > 0)
+            .filter((part) => !/^\d+$/.test(part) || Number(part) < 1);
+          if (bad.length > 0) {
+            setError(t('hosts.badVmids', { tokens: bad.join(', ') }));
+            return;
+          }
+        }
         const next = instances.slice();
         if (editing.index === null) next.push(entry);
         else next[editing.index] = entry;
@@ -667,7 +695,10 @@ window.__ModuleLoader__.load({
                   className: 'pve-vm-controls',
                   children: [
                     jsx(Input, {
-                      value: toInput(field, editing.draft[field.name]),
+                      value:
+                        typeof editing.draft[field.name] === 'string'
+                          ? editing.draft[field.name]
+                          : toInput(field, editing.draft[field.name]),
                       disabled: !writable,
                       spellCheck: false,
                       inputMode: field.kind === 'number' || field.kind === 'numberList' ? 'numeric' : undefined,

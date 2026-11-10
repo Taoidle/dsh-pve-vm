@@ -156,8 +156,9 @@ you can also set in a patch file:
   the first entry of the list when that is empty. An unknown name fails with `BAD_INSTANCE` and
   lists the configured ones.
 * The card's allow-list is per host, and values are separated by commas (a full-width `，`, `、`,
-  `;` or a newline works too). Leaving it empty inherits the global list rather than allowing
-  everything.
+  `;` or a newline works too). A token that is not a positive vmid refuses the save and names the
+  token, rather than being dropped. Leaving the list empty inherits the global list rather than
+  allowing everything.
 * `allowVmids` is decided **per host**. An entry with an empty list inherits the top-level
   `allowVmids`; a VM id allowed on one host is not allowed on another.
 * The entries are isolated, not just labelled: each host gets its own controllers, console
