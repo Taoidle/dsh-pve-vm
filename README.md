@@ -88,8 +88,10 @@ layer, and the same values can be edited there by hand:
   name: dsh-pve-vm
   config:
     # Several PVE hosts: one entry per host, each with its own ssh endpoint and
-    # its own VM ids. An empty list means "one host, described by the ssh fields
-    # below" — a 0.2.x configuration keeps working untouched.
+    # its own VM ids. An empty list means "one implicit `default` host, described
+    # by the ssh fields below" — a 0.2.x configuration keeps working untouched.
+    # The settings page writes this list from the host cards; the ssh keys below
+    # are for patch files and for the implicit default host only.
     instances: []
     defaultInstance: ''         # the host a tool call lands on when it names none
     sshHost: proxmox            # alias from ~/.ssh/config, or an address
@@ -127,8 +129,10 @@ layer, and the same values can be edited there by hand:
 One plugin instance can drive several independent Proxmox VE hosts. Settings → Proxmox VE shows one
 card per host — **Add host** opens a full form (name, SSH host/user/port, key, ssh config, extra
 options, allowed VMs, note), and each card carries **Make default**, **Edit** and **Remove**. With no
-host card configured the section falls back to the 0.2.x single-host fields, so existing profiles keep
-working. The page writes exactly the `instances` list below, which you can also set in a patch file:
+host card configured the plugin still resolves one implicit `default` host from the top-level `sshHost`
+/ `sshUser` / … keys, so an existing 0.2.x profile keeps working — but those keys are config-file only
+now; the settings page edits hosts as cards. The page writes exactly the `instances` list below, which
+you can also set in a patch file:
 
 ```yaml
 - id: pve-vm

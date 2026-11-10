@@ -177,9 +177,10 @@ const texts = () => uniq(flatten(nodes).filter((n) => n.type === 'div' || n.type
 const problems = [];
 const check = (condition, message) => { if (!condition) problems.push(message); };
 
-/* 1. empty state: legacy fields visible, one Add button. */
+/* 1. empty state: one Add button, and nothing that edits a host without a card. */
 check(buttons().length === 1, `empty: buttons ${buttons().map(labelOf).join(',')}`);
-check(inputs().length > 9, `empty: legacy fields should be inputs (got ${inputs().length})`);
+check(!texts().includes('One host, legacy form'), 'the legacy single-host block is still rendered');
+check(!texts().includes('Proxmox host'), 'an ssh-host field is editable without a host card');
 
 /* 2. add a host, fill name + address, save. */
 await click('Add host');

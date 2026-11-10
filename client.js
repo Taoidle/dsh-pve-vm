@@ -52,7 +52,7 @@ window.__ModuleLoader__.load({
         'hosts.add': 'Добавить узел',
         'hosts.addTitle': 'Новый узел PVE',
         'hosts.editTitle': 'Узел {name}',
-        'hosts.empty': 'Пока нет ни одного узла. Добавьте первый — или заполните поля одного узла ниже.',
+        'hosts.empty': 'Пока нет ни одного узла. Добавьте первый — без него работать не с чем.',
         'hosts.name': 'Имя',
         'hosts.nameHint': 'Так инструменты называют этот узел, например lab.',
         'hosts.description': 'Заметка',
@@ -68,7 +68,6 @@ window.__ModuleLoader__.load({
         'hosts.duplicate': 'Имя {name} уже занято.',
         'hosts.allowNone': 'Ни одной ВМ не разрешено',
         'hosts.allowVmidsHint': 'Список этого узла. Пусто — наследуется общий список; чтобы запретить всё, оставьте пустым и общий.',
-        'hosts.legacy': 'Один узел, старый формат',
         'hosts.global': 'Общие настройки',
         'field.sshHost': 'Узел Proxmox',
         'field.sshHostHint': 'Алиас из ~/.ssh/config или адрес',
@@ -157,7 +156,7 @@ window.__ModuleLoader__.load({
         'hosts.add': 'Add host',
         'hosts.addTitle': 'Add a PVE host',
         'hosts.editTitle': 'Edit {name}',
-        'hosts.empty': 'No host added yet. Add the first one — or fill in the single-host fields below.',
+        'hosts.empty': 'No host added yet. Add one — nothing can be reached without it.',
         'hosts.name': 'Name',
         'hosts.nameHint': 'How the tools refer to this host, for example lab.',
         'hosts.description': 'Note',
@@ -173,7 +172,6 @@ window.__ModuleLoader__.load({
         'hosts.duplicate': 'The name {name} is already taken.',
         'hosts.allowNone': 'No VM is allowed',
         'hosts.allowVmidsHint': 'This host\'s list. Empty — inherits the global list; to forbid everything, leave the global list empty too.',
-        'hosts.legacy': 'One host, legacy form',
         'hosts.global': 'Global settings',
         'field.sshHost': 'Proxmox host',
         'field.sshHostHint': 'Alias from ~/.ssh/config, or an address',
@@ -188,7 +186,7 @@ window.__ModuleLoader__.load({
         'field.sshExtraOptions': 'Extra ssh options',
         'field.sshExtraOptionsHint': '-o options, comma separated',
         'field.allowVmids': 'Allowed VMs',
-        'field.allowVmidsHint': 'VMs the plugin may touch. An empty list forbids everything.',
+        'field.allowVmidsHint': 'The list a host card inherits when its own is empty. An empty list forbids everything.',
         'field.enableConsole': 'Console tools (VNC)',
         'field.enableGuest': 'Guest-agent tools',
         'field.inputChannel': 'Text input channel',
@@ -262,7 +260,7 @@ window.__ModuleLoader__.load({
         'hosts.add': '添加主机',
         'hosts.addTitle': '添加 PVE 主机',
         'hosts.editTitle': '编辑 {name}',
-        'hosts.empty': '还没有添加主机。添加第一台——或填写下方的单机字段。',
+        'hosts.empty': '还没有添加主机。先添加一台——没有主机就什么也连不上。',
         'hosts.name': '名称',
         'hosts.nameHint': '工具用这个名字指向这台主机，例如 lab。',
         'hosts.description': '备注',
@@ -278,7 +276,6 @@ window.__ModuleLoader__.load({
         'hosts.duplicate': '名称 {name} 已被占用。',
         'hosts.allowNone': '未允许任何虚拟机',
         'hosts.allowVmidsHint': '仅作用于这台主机。留空——继承全局列表；要全部禁止，全局列表也要留空。',
-        'hosts.legacy': '单机配置（旧格式）',
         'hosts.global': '全局设置',
         'field.sshHost': 'Proxmox 主机',
         'field.sshHostHint': '~/.ssh/config 中的别名或地址',
@@ -372,6 +369,7 @@ window.__ModuleLoader__.load({
 
     /** Card fields: setting name, input kind and dictionary keys. */
     const FIELDS = [
+      { name: 'allowVmids', kind: 'numberList', hintKey: 'field.allowVmidsHint' },
       { name: 'enableConsole', kind: 'boolean' },
       { name: 'enableGuest', kind: 'boolean' },
       { name: 'inputChannel', kind: 'choice', choices: CHANNEL_CHOICES, hintKey: 'field.inputChannelHint' },
@@ -384,21 +382,6 @@ window.__ModuleLoader__.load({
       { name: 'viewFollowAgent', kind: 'boolean', hintKey: 'field.viewFollowAgentHint' },
       { name: 'viewFps', kind: 'number', hintKey: 'field.viewFpsHint' },
       { name: 'viewScale', kind: 'number', hintKey: 'field.viewScaleHint' },
-    ];
-
-    /**
-     * The 0.2.x single-host fields. They stay editable, but only while no host
-     * card exists: `normalizeInstances` builds the `default` entry from exactly
-     * these values, so showing both at once would be two editors for one host.
-     */
-    const LEGACY_FIELDS = [
-      { name: 'sshHost', kind: 'text', hintKey: 'field.sshHostHint' },
-      { name: 'sshUser', kind: 'text' },
-      { name: 'sshPort', kind: 'number' },
-      { name: 'sshKeyPath', kind: 'text', hintKey: 'field.sshKeyPathHint' },
-      { name: 'sshConfigFile', kind: 'text', hintKey: 'field.sshConfigFileHint' },
-      { name: 'sshExtraOptions', kind: 'list', hintKey: 'field.sshExtraOptionsHint' },
-      { name: 'allowVmids', kind: 'numberList', hintKey: 'field.allowVmidsHint' },
     ];
 
     const STYLE_ID = 'dsh-pve-vm-styles';
@@ -902,10 +885,6 @@ window.__ModuleLoader__.load({
 
       const instances = Array.isArray(values.instances) ? values.instances : [];
       const defaultName = String(values.defaultInstance ?? '') || instances[0]?.name || '';
-      // The single-host fields are the source of the generated `default` entry, so
-      // they are shown only while that entry does not exist yet.
-      const legacyRows = instances.length === 0 ? LEGACY_FIELDS.map(renderRow) : [];
-
       return jsxs('div', {
         className: 'pve-vm-section',
         children: [
@@ -917,10 +896,6 @@ window.__ModuleLoader__.load({
             children: [status.text, note ? ' · ' + note : ''],
           }),
           jsx(HostsBlock, { t, instances, defaultName, writable, onWrite: writeInstances }),
-          legacyRows.length === 0
-            ? null
-            : jsx('div', { className: 'pve-vm-title-sm pve-vm-group-title', children: t('hosts.legacy') }),
-          ...legacyRows,
           jsx('div', { className: 'pve-vm-title-sm pve-vm-group-title', children: t('hosts.global') }),
           ...FIELDS.map(renderRow),
         ],
