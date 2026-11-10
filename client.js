@@ -48,15 +48,33 @@ window.__ModuleLoader__.load({
         overridden: 'изменено',
         saveFailed: 'Не сохранилось',
         saved: 'Сохранено',
-        'field.instances': 'Другие узлы PVE',
-        'field.instancesHint':
-          'JSON-список хостов: [{"name":"lab","sshHost":"10.0.0.11","allowVmids":[100]}]. Пусто — один узел из полей ниже.',
-        'field.defaultInstance': 'Узел по умолчанию',
-        'field.defaultInstanceHint': 'Имя из списка выше; пусто — первый в списке.',
+        'hosts.title': 'Узлы PVE',
+        'hosts.add': 'Добавить узел',
+        'hosts.addTitle': 'Новый узел PVE',
+        'hosts.editTitle': 'Узел {name}',
+        'hosts.empty': 'Пока нет ни одного узла. Добавьте первый — или заполните поля одного узла ниже.',
+        'hosts.name': 'Имя',
+        'hosts.nameHint': 'Так инструменты называют этот узел, например lab.',
+        'hosts.description': 'Заметка',
+        'hosts.descriptionHint': 'Необязательно; показывается на карточке.',
+        'hosts.defaultBadge': 'по умолчанию',
+        'hosts.makeDefault': 'Сделать основным',
+        'hosts.edit': 'Изменить',
+        'hosts.remove': 'Удалить',
+        'hosts.confirmRemove': 'Нажмите ещё раз',
+        'hosts.save': 'Сохранить',
+        'hosts.cancel': 'Отмена',
+        'hosts.required': 'Имя и SSH-узел обязательны.',
+        'hosts.duplicate': 'Имя {name} уже занято.',
+        'hosts.allowNone': 'Ни одной ВМ не разрешено',
+        'hosts.legacy': 'Один узел, старый формат',
+        'hosts.global': 'Общие настройки',
         'field.sshHost': 'Узел Proxmox',
         'field.sshHostHint': 'Алиас из ~/.ssh/config или адрес',
         'field.sshUser': 'Пользователь ssh',
+        'field.sshUserHint': 'Пусто — root',
         'field.sshPort': 'Порт ssh',
+        'field.sshPortHint': 'По умолчанию 22',
         'field.sshKeyPath': 'Ключ ssh',
         'field.sshKeyPathHint': 'Пусто — ключи по умолчанию',
         'field.sshConfigFile': 'Свой ssh-config',
@@ -134,15 +152,33 @@ window.__ModuleLoader__.load({
         overridden: 'overridden',
         saveFailed: 'Not saved',
         saved: 'Saved',
-        'field.instances': 'Additional PVE hosts',
-        'field.instancesHint':
-          'A JSON list of hosts: [{"name":"lab","sshHost":"10.0.0.11","allowVmids":[100]}]. Empty — the single host from the fields below.',
-        'field.defaultInstance': 'Default host',
-        'field.defaultInstanceHint': 'A name from the list above; empty — the first entry.',
+        'hosts.title': 'PVE hosts',
+        'hosts.add': 'Add host',
+        'hosts.addTitle': 'Add a PVE host',
+        'hosts.editTitle': 'Edit {name}',
+        'hosts.empty': 'No host added yet. Add the first one — or fill in the single-host fields below.',
+        'hosts.name': 'Name',
+        'hosts.nameHint': 'How the tools refer to this host, for example lab.',
+        'hosts.description': 'Note',
+        'hosts.descriptionHint': 'Optional; shown on this card.',
+        'hosts.defaultBadge': 'default',
+        'hosts.makeDefault': 'Make default',
+        'hosts.edit': 'Edit',
+        'hosts.remove': 'Remove',
+        'hosts.confirmRemove': 'Click again to remove',
+        'hosts.save': 'Save',
+        'hosts.cancel': 'Cancel',
+        'hosts.required': 'A name and an SSH host are required.',
+        'hosts.duplicate': 'The name {name} is already taken.',
+        'hosts.allowNone': 'No VM is allowed',
+        'hosts.legacy': 'One host, legacy form',
+        'hosts.global': 'Global settings',
         'field.sshHost': 'Proxmox host',
         'field.sshHostHint': 'Alias from ~/.ssh/config, or an address',
         'field.sshUser': 'SSH user',
+        'field.sshUserHint': 'Empty — root',
         'field.sshPort': 'SSH port',
+        'field.sshPortHint': 'Default 22',
         'field.sshKeyPath': 'SSH key',
         'field.sshKeyPathHint': 'Empty — default keys',
         'field.sshConfigFile': 'Custom ssh config',
@@ -220,15 +256,33 @@ window.__ModuleLoader__.load({
         overridden: '已修改',
         saveFailed: '未保存',
         saved: '已保存',
-        'field.instances': '其他 PVE 主机',
-        'field.instancesHint':
-          'JSON 主机列表：[{"name":"lab","sshHost":"10.0.0.11","allowVmids":[100]}]。留空——使用下方字段的单一主机。',
-        'field.defaultInstance': '默认主机',
-        'field.defaultInstanceHint': '上方列表中的名称；留空——第一项。',
+        'hosts.title': 'PVE 主机',
+        'hosts.add': '添加主机',
+        'hosts.addTitle': '添加 PVE 主机',
+        'hosts.editTitle': '编辑 {name}',
+        'hosts.empty': '还没有添加主机。添加第一台——或填写下方的单机字段。',
+        'hosts.name': '名称',
+        'hosts.nameHint': '工具用这个名字指向这台主机，例如 lab。',
+        'hosts.description': '备注',
+        'hosts.descriptionHint': '可选，显示在卡片上。',
+        'hosts.defaultBadge': '默认',
+        'hosts.makeDefault': '设为默认',
+        'hosts.edit': '编辑',
+        'hosts.remove': '删除',
+        'hosts.confirmRemove': '再点一次确认删除',
+        'hosts.save': '保存',
+        'hosts.cancel': '取消',
+        'hosts.required': '名称和 SSH 主机不能为空。',
+        'hosts.duplicate': '名称 {name} 已被占用。',
+        'hosts.allowNone': '未允许任何虚拟机',
+        'hosts.legacy': '单机配置（旧格式）',
+        'hosts.global': '全局设置',
         'field.sshHost': 'Proxmox 主机',
         'field.sshHostHint': '~/.ssh/config 中的别名或地址',
         'field.sshUser': 'SSH 用户',
+        'field.sshUserHint': '留空——root',
         'field.sshPort': 'SSH 端口',
+        'field.sshPortHint': '默认 22',
         'field.sshKeyPath': 'SSH 密钥',
         'field.sshKeyPathHint': '留空——使用默认密钥',
         'field.sshConfigFile': '自定义 ssh 配置',
@@ -300,17 +354,21 @@ window.__ModuleLoader__.load({
       { value: 'vnc', labelKey: 'channel.vnc' },
     ];
 
+    /** One PVE host's own fields: the editor form edits exactly these. */
+    const HOST_FIELDS = [
+      { name: 'name', kind: 'text', labelKey: 'hosts.name', hintKey: 'hosts.nameHint' },
+      { name: 'sshHost', kind: 'text', labelKey: 'field.sshHost', hintKey: 'field.sshHostHint' },
+      { name: 'sshUser', kind: 'text', labelKey: 'field.sshUser', hintKey: 'field.sshUserHint' },
+      { name: 'sshPort', kind: 'number', labelKey: 'field.sshPort', hintKey: 'field.sshPortHint' },
+      { name: 'sshKeyPath', kind: 'text', labelKey: 'field.sshKeyPath', hintKey: 'field.sshKeyPathHint' },
+      { name: 'sshConfigFile', kind: 'text', labelKey: 'field.sshConfigFile', hintKey: 'field.sshConfigFileHint' },
+      { name: 'sshExtraOptions', kind: 'list', labelKey: 'field.sshExtraOptions', hintKey: 'field.sshExtraOptionsHint' },
+      { name: 'allowVmids', kind: 'numberList', labelKey: 'field.allowVmids', hintKey: 'field.allowVmidsHint' },
+      { name: 'description', kind: 'text', labelKey: 'hosts.description', hintKey: 'hosts.descriptionHint' },
+    ];
+
     /** Card fields: setting name, input kind and dictionary keys. */
     const FIELDS = [
-      { name: 'defaultInstance', kind: 'text', hintKey: 'field.defaultInstanceHint' },
-      { name: 'instances', kind: 'json', hintKey: 'field.instancesHint' },
-      { name: 'sshHost', kind: 'text' },
-      { name: 'sshUser', kind: 'text' },
-      { name: 'sshPort', kind: 'number' },
-      { name: 'sshKeyPath', kind: 'text', hintKey: 'field.sshKeyPathHint' },
-      { name: 'sshConfigFile', kind: 'text', hintKey: 'field.sshConfigFileHint' },
-      { name: 'sshExtraOptions', kind: 'list', hintKey: 'field.sshExtraOptionsHint' },
-      { name: 'allowVmids', kind: 'numberList', hintKey: 'field.allowVmidsHint' },
       { name: 'enableConsole', kind: 'boolean' },
       { name: 'enableGuest', kind: 'boolean' },
       { name: 'inputChannel', kind: 'choice', choices: CHANNEL_CHOICES, hintKey: 'field.inputChannelHint' },
@@ -323,6 +381,21 @@ window.__ModuleLoader__.load({
       { name: 'viewFollowAgent', kind: 'boolean', hintKey: 'field.viewFollowAgentHint' },
       { name: 'viewFps', kind: 'number', hintKey: 'field.viewFpsHint' },
       { name: 'viewScale', kind: 'number', hintKey: 'field.viewScaleHint' },
+    ];
+
+    /**
+     * The 0.2.x single-host fields. They stay editable, but only while no host
+     * card exists: `normalizeInstances` builds the `default` entry from exactly
+     * these values, so showing both at once would be two editors for one host.
+     */
+    const LEGACY_FIELDS = [
+      { name: 'sshHost', kind: 'text', hintKey: 'field.sshHostHint' },
+      { name: 'sshUser', kind: 'text' },
+      { name: 'sshPort', kind: 'number' },
+      { name: 'sshKeyPath', kind: 'text', hintKey: 'field.sshKeyPathHint' },
+      { name: 'sshConfigFile', kind: 'text', hintKey: 'field.sshConfigFileHint' },
+      { name: 'sshExtraOptions', kind: 'list', hintKey: 'field.sshExtraOptionsHint' },
+      { name: 'allowVmids', kind: 'numberList', hintKey: 'field.allowVmidsHint' },
     ];
 
     const STYLE_ID = 'dsh-pve-vm-styles';
@@ -354,6 +427,20 @@ window.__ModuleLoader__.load({
 .pve-vm-warn { border: 1px solid var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-state-warn-primary); border-radius: 8px; padding: 6px 9px; font-size: 11.5px; line-height: 1.45; }
 .pve-vm-error { border: 1px solid var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); border-radius: 8px; padding: 6px 9px; font-size: 11.5px; line-height: 1.45; }
 .pve-vm-ok { color: var(--dsw-alias-state-success-primary); font-size: 11.5px; }
+.pve-vm-title-sm { font-size: 13px; font-weight: 600; }
+.pve-vm-group-title { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.pve-vm-hosts { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-2); }
+.pve-vm-hosts-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pve-vm-host-empty { font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
+.pve-vm-host { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); }
+.pve-vm-host[data-default="1"] { border-color: var(--dsw-alias-brand-primary); }
+.pve-vm-host-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pve-vm-host-name { font-size: 13px; font-weight: 600; }
+.pve-vm-badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+.pve-vm-host-addr { margin-left: auto; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.pve-vm-editor { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--dsw-alias-border-l1); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); }
+.pve-vm-edit-row { display: grid; grid-template-columns: minmax(120px, 180px) 1fr; gap: 6px 12px; align-items: start; }
+.pve-vm-edit-label { font-size: 12.5px; padding-top: 7px; }
 .pve-vm-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pve-vm-tools .pve-vm-select { width: auto; }
 `;
@@ -370,16 +457,6 @@ window.__ModuleLoader__.load({
 
     /** Field value to its input representation. */
     function toInput(field, value) {
-      // The instance list is an array of objects: a textarea with JSON is the only
-      // shape the card can edit without a per-row editor, and it keeps the whole
-      // entry (including fields this build does not know) intact.
-      if (field.kind === 'json') {
-        try {
-          return JSON.stringify(value ?? [], null, 2);
-        } catch {
-          return '';
-        }
-      }
       if (field.kind === 'list' || field.kind === 'numberList') return Array.isArray(value) ? value.join(', ') : '';
       if (value === undefined || value === null) return '';
       return String(value);
@@ -387,16 +464,6 @@ window.__ModuleLoader__.load({
 
     /** Input to a setting value; undefined means "leave it alone". */
     function fromInput(field, text) {
-      if (field.kind === 'json') {
-        try {
-          const parsed = JSON.parse(text);
-          return Array.isArray(parsed) ? parsed : undefined;
-        } catch {
-          // Invalid JSON stays in the textarea: nothing is written, and the next
-          // blur retries. The service validates the schema after that.
-          return undefined;
-        }
-      }
       if (field.kind === 'number') {
         const parsed = Number(text.trim());
         return Number.isFinite(parsed) ? parsed : undefined;
@@ -414,6 +481,255 @@ window.__ModuleLoader__.load({
           .filter((value) => Number.isInteger(value) && value > 0);
       }
       return text;
+    }
+
+    /** What a new host card starts from: the plugin's own defaults. */
+    const HOST_DEFAULTS = { sshUser: 'root', sshPort: 22, sshExtraOptions: [], allowVmids: [], description: '' };
+
+    /** A fresh host name derived from the SSH address and kept unique in the list. */
+    function hostNameFor(host, taken) {
+      const base =
+        String(host ?? '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9._-]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'pve';
+      let candidate = base;
+      for (let index = 2; taken.includes(candidate); index += 1) candidate = `${base}-${index}`;
+      return candidate;
+    }
+
+    /** "root@10.0.0.11" (or with :port) for a card line. */
+    function hostAddress(entry) {
+      const user = entry.sshUser || 'root';
+      const host = entry.sshHost || '?';
+      const port = Number(entry.sshPort) || 22;
+      return port === 22 ? `${user}@${host}` : `${user}@${host}:${port}`;
+    }
+
+    /** The "allowed VMs" line of a card. */
+    function hostAllowedText(entry, t) {
+      const vmids = Array.isArray(entry.allowVmids) ? entry.allowVmids : [];
+      return vmids.length === 0 ? t('hosts.allowNone') : `${t('field.allowVmids')}: ${vmids.join(', ')}`;
+    }
+
+    /**
+     * The host list: one complete configuration card per PVE host, shaped like the
+     * TrueNAS settings page. Every card edits exactly one entry of the `instances`
+     * array the tools read, and writes go through configForms like any other field.
+     * @param {object} props t, instances, defaultName, writable, onWrite.
+     */
+    function HostsBlock(props) {
+      const { t, instances, defaultName, writable, onWrite } = props;
+      const [editing, setEditing] = React.useState(null);
+      const [error, setError] = React.useState(null);
+      const [pendingRemove, setPendingRemove] = React.useState(null);
+
+      const startAdd = () => {
+        setPendingRemove(null);
+        setError(null);
+        setEditing({ index: null, draft: { ...HOST_DEFAULTS, name: '', sshHost: '' } });
+      };
+
+      const startEdit = (index) => {
+        setPendingRemove(null);
+        setError(null);
+        setEditing({ index, draft: { ...HOST_DEFAULTS, ...instances[index] } });
+      };
+
+      const cancel = () => {
+        setEditing(null);
+        setError(null);
+      };
+
+      const setField = (field, text) => {
+        const value = fromInput(field, text);
+        setEditing((state) =>
+          state === null ? state : { ...state, draft: { ...state.draft, [field.name]: value === undefined ? '' : value } },
+        );
+      };
+
+      /** Validate and write the edited entry; the whole list is one settings field. */
+      const save = async () => {
+        if (editing === null) return;
+        const draft = editing.draft;
+        const name = String(draft.name ?? '').trim();
+        const sshHost = String(draft.sshHost ?? '').trim();
+        if (name.length === 0 || sshHost.length === 0) {
+          setError(t('hosts.required'));
+          return;
+        }
+        const taken = instances
+          .map((entry, index) => (editing.index === null || index !== editing.index ? entry.name : null))
+          .filter((entry) => typeof entry === 'string');
+        if (taken.includes(name)) {
+          setError(t('hosts.duplicate', { name }));
+          return;
+        }
+        const entry = {
+          ...draft,
+          name,
+          sshHost,
+          sshUser: String(draft.sshUser ?? '').trim() || HOST_DEFAULTS.sshUser,
+          sshPort: Number(draft.sshPort) || HOST_DEFAULTS.sshPort,
+          sshExtraOptions: Array.isArray(draft.sshExtraOptions) ? draft.sshExtraOptions : [],
+          allowVmids: Array.isArray(draft.allowVmids) ? draft.allowVmids : [],
+          description: String(draft.description ?? '').trim(),
+        };
+        const next = instances.slice();
+        if (editing.index === null) next.push(entry);
+        else next[editing.index] = entry;
+        const previousDefault = String(defaultName ?? '');
+        let nextDefault = previousDefault;
+        if (previousDefault.length === 0 || !next.some((item) => item.name === previousDefault)) {
+          nextDefault = next[0]?.name ?? '';
+        }
+        if (editing.index !== null && instances[editing.index]?.name === previousDefault) nextDefault = entry.name;
+        const accepted = await onWrite(next, nextDefault);
+        if (accepted) {
+          setEditing(null);
+          setError(null);
+        }
+      };
+
+      const remove = async (index) => {
+        const removed = instances[index]?.name;
+        if (pendingRemove !== removed) {
+          setPendingRemove(removed);
+          return;
+        }
+        const next = instances.filter((_, position) => position !== index);
+        const nextDefault = removed === defaultName ? (next[0]?.name ?? '') : defaultName;
+        await onWrite(next, nextDefault);
+        setPendingRemove(null);
+      };
+
+      const makeDefault = async (index) => {
+        setPendingRemove(null);
+        await onWrite(instances, instances[index].name);
+      };
+
+      const cards = instances.map((entry, index) =>
+        jsxs(
+          'div',
+          {
+            className: 'pve-vm-host',
+            'data-default': entry.name === defaultName ? '1' : '0',
+            children: [
+              jsxs('div', {
+                className: 'pve-vm-host-head',
+                children: [
+                  jsx('span', { className: 'pve-vm-host-name', children: entry.name }),
+                  entry.name === defaultName ? jsx('span', { className: 'pve-vm-badge', children: t('hosts.defaultBadge') }) : null,
+                  jsx('span', { className: 'pve-vm-host-addr', children: hostAddress(entry) }),
+                ],
+              }),
+              jsx('div', { className: 'pve-vm-line', children: hostAllowedText(entry, t) }),
+              entry.description
+                ? jsx('div', { className: 'pve-vm-line', children: entry.description })
+                : null,
+              jsxs('div', {
+                className: 'pve-vm-tools',
+                children: [
+                  entry.name === defaultName
+                    ? null
+                    : jsx(Button, {
+                        variant: 'ghost',
+                        size: 'sm',
+                        disabled: !writable,
+                        children: t('hosts.makeDefault'),
+                        onClick: () => makeDefault(index),
+                      }),
+                  jsx(Button, {
+                    variant: 'ghost',
+                    size: 'sm',
+                    disabled: !writable,
+                    children: t('hosts.edit'),
+                    onClick: () => startEdit(index),
+                  }),
+                  jsx(Button, {
+                    variant: 'ghost',
+                    size: 'sm',
+                    disabled: !writable,
+                    children: pendingRemove === entry.name ? t('hosts.confirmRemove') : t('hosts.remove'),
+                    onClick: () => remove(index),
+                  }),
+                ],
+              }),
+            ],
+          },
+          `${entry.name}:${index}`,
+        ),
+      );
+
+      let editor = null;
+      if (editing !== null) {
+        const rows = HOST_FIELDS.map((field) =>
+          jsxs(
+            'div',
+            {
+              className: 'pve-vm-edit-row',
+              children: [
+                jsx('div', { className: 'pve-vm-edit-label', children: t(field.labelKey) }),
+                jsxs('div', {
+                  className: 'pve-vm-controls',
+                  children: [
+                    jsx(Input, {
+                      value: toInput(field, editing.draft[field.name]),
+                      disabled: !writable,
+                      spellCheck: false,
+                      inputMode: field.kind === 'number' || field.kind === 'numberList' ? 'numeric' : undefined,
+                      onChange: (event) => setField(field, event.target.value),
+                      onKeyDown: (event) => {
+                        if (event.key === 'Enter') save();
+                      },
+                    }),
+                    field.hintKey ? jsx('div', { className: 'pve-vm-hint', children: t(field.hintKey) }) : null,
+                  ],
+                }),
+              ],
+            },
+            field.name,
+          ),
+        );
+        editor = jsxs('div', {
+          className: 'pve-vm-editor',
+          children: [
+            jsx('div', {
+              className: 'pve-vm-title-sm',
+              children:
+                editing.index === null
+                  ? t('hosts.addTitle')
+                  : t('hosts.editTitle', { name: instances[editing.index]?.name ?? '' }),
+            }),
+            ...rows,
+            error === null ? null : jsx('div', { className: 'pve-vm-error', children: error }),
+            jsxs('div', {
+              className: 'pve-vm-tools',
+              children: [
+                jsx(Button, { variant: 'primary', size: 'sm', disabled: !writable, children: t('hosts.save'), onClick: save }),
+                jsx(Button, { variant: 'ghost', size: 'sm', children: t('hosts.cancel'), onClick: cancel }),
+              ],
+            }),
+          ],
+        });
+      }
+
+      return jsxs('div', {
+        className: 'pve-vm-hosts',
+        children: [
+          jsxs('div', {
+            className: 'pve-vm-hosts-head',
+            children: [
+              jsx('div', { className: 'pve-vm-title-sm', children: t('hosts.title') }),
+              jsx(Button, { variant: 'secondary', size: 'sm', disabled: !writable, children: t('hosts.add'), onClick: startAdd }),
+            ],
+          }),
+          instances.length === 0 ? jsx('div', { className: 'pve-vm-host-empty', children: t('hosts.empty') }) : null,
+          ...cards,
+          editor,
+        ],
+      });
     }
 
     /**
@@ -462,7 +778,30 @@ window.__ModuleLoader__.load({
         setTimeout(() => setNote(null), 2500);
       };
 
-      const rows = FIELDS.map((field) => {
+      /** Write the host list and its default host: two settings fields, one action. */
+      const writeInstances = async (next, nextDefault) => {
+        const flash = (text) => {
+          setNote(text);
+          setTimeout(() => setNote(null), 2500);
+        };
+        try {
+          const accepted = await form.set('instances', next);
+          if (!accepted) {
+            flash(t('saveFailed'));
+            return false;
+          }
+          if (String(nextDefault ?? '') !== String(values.defaultInstance ?? '')) {
+            await form.set('defaultInstance', String(nextDefault ?? ''));
+          }
+          flash(t('saved'));
+          return true;
+        } catch {
+          flash(t('saveFailed'));
+          return false;
+        }
+      };
+
+      const renderRow = (field) => {
         const current = draft[field.name] ?? toInput(field, values[field.name]);
         const overridden = Object.hasOwn(userLayer, field.name);
         const hint = field.hintKey ? t(field.hintKey) : undefined;
@@ -556,7 +895,13 @@ window.__ModuleLoader__.load({
           },
           field.name,
         );
-      });
+      };
+
+      const instances = Array.isArray(values.instances) ? values.instances : [];
+      const defaultName = String(values.defaultInstance ?? '') || instances[0]?.name || '';
+      // The single-host fields are the source of the generated `default` entry, so
+      // they are shown only while that entry does not exist yet.
+      const legacyRows = instances.length === 0 ? LEGACY_FIELDS.map(renderRow) : [];
 
       return jsxs('div', {
         className: 'pve-vm-section',
@@ -568,7 +913,13 @@ window.__ModuleLoader__.load({
             'data-tone': status.tone,
             children: [status.text, note ? ' · ' + note : ''],
           }),
-          ...rows,
+          jsx(HostsBlock, { t, instances, defaultName, writable, onWrite: writeInstances }),
+          legacyRows.length === 0
+            ? null
+            : jsx('div', { className: 'pve-vm-title-sm pve-vm-group-title', children: t('hosts.legacy') }),
+          ...legacyRows,
+          jsx('div', { className: 'pve-vm-title-sm pve-vm-group-title', children: t('hosts.global') }),
+          ...FIELDS.map(renderRow),
         ],
       });
     }

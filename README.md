@@ -124,8 +124,11 @@ layer, and the same values can be edited there by hand:
 
 ### Several PVE hosts
 
-One plugin instance can drive several independent Proxmox VE hosts. Add them to `instances`, each
-with its own ssh endpoint and its own allow-list:
+One plugin instance can drive several independent Proxmox VE hosts. Settings → Proxmox VE shows one
+card per host — **Add host** opens a full form (name, SSH host/user/port, key, ssh config, extra
+options, allowed VMs, note), and each card carries **Make default**, **Edit** and **Remove**. With no
+host card configured the section falls back to the 0.2.x single-host fields, so existing profiles keep
+working. The page writes exactly the `instances` list below, which you can also set in a patch file:
 
 ```yaml
 - id: pve-vm
@@ -148,6 +151,8 @@ with its own ssh endpoint and its own allow-list:
 * Every tool takes an optional `instance`. Without it, the call lands on `defaultInstance`, or on
   the first entry of the list when that is empty. An unknown name fails with `BAD_INSTANCE` and
   lists the configured ones.
+* The card's allow-list is per host. Leaving it empty inherits the global list rather than
+  allowing everything.
 * `allowVmids` is decided **per host**. An entry with an empty list inherits the top-level
   `allowVmids`; a VM id allowed on one host is not allowed on another.
 * The entries are isolated, not just labelled: each host gets its own controllers, console

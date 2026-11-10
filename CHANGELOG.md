@@ -3,6 +3,18 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.3.1] — 2026-11-10
+
+### Changed
+
+* **The host list is edited as cards, not as JSON.** Settings → Proxmox VE now shows one complete
+  configuration card per PVE host — name, `root@host:port`, allow-list, note — with **Make default**,
+  **Edit** and **Remove** on the card and an **Add host** form for a new one. The card writes the same
+  `instances` array as before, one field per host, so the config file format is unchanged.
+* The 0.2.x single-host fields (`sshHost`, `sshUser`, …) are shown only while no host card exists:
+  they are the source of the generated `default` entry, and showing both at once would be two
+  editors for one host. The rest of the settings sit under a **Global settings** heading.
+
 ## [0.3.0] — 2026-11-10
 
 ### Added
