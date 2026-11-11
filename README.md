@@ -309,6 +309,53 @@ which is awaited before the call returns. `delete-volume` and `import-disk` need
 token; `import-disk` adds the disk unattached, so assign it to `scsiN`/`virtioN` afterwards with
 `vm_config`.
 
+### Access control: users, groups, roles, ACLs, tokens
+
+| Tool | Parameters | What it does |
+|---|---|---|
+| `pve_user` | `action` = `list` \| `get` \| `create` \| `update` \| `delete`, `userid?`, `password?`, `email?`, `firstname?`, `lastname?`, `groups?`, `comment?`, `enable?`, `expire?`, `confirm?` | Cluster users; the id must be `name@realm`. Writes need a token. |
+| `pve_group` | `action` = `list` \| `create` \| `update` \| `delete`, `groupid?`, `comment?`, `users?`, `confirm?` | Groups and their members. Writes need a token. |
+| `pve_role` | `action` = `list` \| `get` \| `create` \| `update` \| `delete`, `roleid?`, `privs?`, `append?`, `confirm?` | Roles and their privilege sets; `append` merges into the existing set instead of replacing it. Writes need a token. |
+| `pve_acl` | `action` = `list` \| `set` \| `remove`, `path`, `users?` / `groups?` / `tokens?` (exactly one), `roles`, `propagate?`, `confirm?` | ACL entries on an object path. `remove` sends `delete=1` on the same endpoint. Writes need a token. |
+| `pve_token` | `action` = `list` \| `create` \| `remove`, `userid`, `tokenid?`, `privsep?`, `comment?`, `expire?`, `confirm?` | API tokens of a user. **The secret is printed exactly once**, by `create`. Writes need a token. |
+
+### Two tokens: an operator and an access manager
+
+Managing access is not a guest operation: PVE gates `/access` behind `Permissions.Modify`, `User.Modify`,
+`Group.Allocate` and `Realm.Allocate`, and those privileges also let a token re-grant itself anything.
+Keeping them on the every-day token would undo the point of a scoped token, so give the plugin two
+cards on the same node:
+
+```yaml
+instances:
+  - name: lab                 # day-to-day: guests, storage, backups
+    sshHost: 10.0.0.11
+    apiUrl: https://10.0.0.11:8006
+    apiToken: 'root@pam!dsh=<secret>'
+    mode: api
+  - name: lab-admin           # access control only
+    sshHost: 10.0.0.11
+    apiUrl: https://10.0.0.11:8006
+    apiToken: 'root@pam!dsh-admin=<secret>'
+    mode: api
+    description: "same node, PVEAdmin token — users, groups, roles, ACLs, tokens"
+```
+
+Create the scoped role once on the node (the privilege names below are what the tools in this plugin
+actually use — guest lifecycle and configuration, snapshots and backups, storage, node status,
+services and tasks, pools):
+
+```bash
+pveum role add DSHOperator -privs "VM.Audit,VM.Console,VM.Monitor,VM.PowerMgmt,VM.Snapshot,VM.Snapshot.Rollback,VM.Backup,VM.Migrate,VM.Clone,VM.Allocate,VM.Config.Disk,VM.Config.CDROM,VM.Config.Cloudinit,VM.Config.CPU,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,Datastore.Audit,Datastore.Allocate,Datastore.AllocateSpace,Datastore.AllocateTemplate,Sys.Audit,Sys.Modify,Sys.PowerMgmt,Sys.Syslog,Sys.Console,Pool.Audit,Pool.Allocate"
+pveum user token add root@pam dsh --privsep 1 --comment "DeepSeek Harness"
+pveum acl modify / --tokens 'root@pam!dsh' --roles DSHOperator
+```
+
+Then create the second token with `PVEAdmin` (or a role that only carries the access privileges), and
+point only the `-admin` card at it. A denied API call now says so instead of returning an empty body:
+`permission denied — the token's role does not grant this path (Permissions.Modify manages access;
+VM.* and Datastore.* cover guests and storage)`.
+
 ### Dangerous operations need a second confirmation
 
 A dangerous call does **nothing** on its first invocation. It returns

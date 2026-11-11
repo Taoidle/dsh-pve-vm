@@ -3,6 +3,29 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.8.2] — 2026-11-11
+
+### Fixed
+
+- `pve_role get` read `/access/roles/{id}` as `{ privs }`, but Proxmox answers a map of privilege → 1
+  even with `--output-format json`; the render now joins the keys instead of printing "no privileges".
+
+## [0.8.0] — 2026-11-11
+
+### Added
+
+- Access control: `pve_user`, `pve_group`, `pve_role`, `pve_acl` and `pve_token`. Every write is
+  confirmed with a token; role updates can append to the existing privilege set, and `pve_acl`
+  refuses to mix two subject kinds in one entry.
+- `pve_token create` prints the secret exactly once and says so — Proxmox never shows it again.
+- README: the two-token pattern (a `DSHOperator` role for guests/storage/backups, a second card with a
+  `PVEAdmin` token for access control) and the exact `pveum` recipe.
+
+### Changed
+
+- A 401/403 from the API is explained as a missing privilege instead of printing an empty body:
+  `permission denied — the token's role does not grant this path`.
+
 ## [0.7.0] — 2026-11-11
 
 ### Added

@@ -19,6 +19,7 @@ import { lxcTools } from './lxc.js';
 import { backupJobTools } from './backup-jobs.js';
 import { poolTools } from './pools.js';
 import { storageAdminTools } from './storage-admin.js';
+import { accessTools } from './access.js';
 
 const problems = [];
 const check = (name, fn) => {
@@ -115,10 +116,48 @@ const server = http.createServer((request, response) => {
       return answer([{ volid: 'local:iso/debian-12.iso', size: 536870912, ctime: 1700000000, content: 'iso' }]);
     }
     if (path === '/api2/json/nodes/pve-ci/storage/local/upload') return answer(UPID);
+    if (path === '/api2/json/forbidden') {
+      response.writeHead(403, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ data: null }));
+      return undefined;
+    }
     if (path === '/api2/json/nodes/pve-ci/storage/local/download-url') return answer(UPID);
     if (path.startsWith('/api2/json/nodes/pve-ci/storage/local/content/') && request.method === 'DELETE') return answer(null);
     if (path === `/api2/json/nodes/pve-ci/tasks/${encodeURIComponent(UPID)}/status`) {
       return answer({ status: 'stopped', exitstatus: 'OK' });
+    }
+    if (path === '/api2/json/access/users' && request.method === 'GET') {
+      return answer([{ userid: 'root@pam' }, { userid: 'ci@pve', groups: 'ci', enable: 1 }]);
+    }
+    if (path === `/api2/json/access/users/${encodeURIComponent('ci@pve')}` && request.method === 'GET') {
+      return answer({ userid: 'ci@pve', groups: 'ci', enable: 1 });
+    }
+    if (path === '/api2/json/access/users' && request.method === 'POST') return answer(null);
+    if (path === `/api2/json/access/users/${encodeURIComponent('ci@pve')}` && (request.method === 'PUT' || request.method === 'DELETE')) {
+      return answer(null);
+    }
+    if (path === '/api2/json/access/groups' && request.method === 'GET') return answer([{ groupid: 'ci', comment: 'CI group' }]);
+    if (path === '/api2/json/access/groups' && request.method === 'POST') return answer(null);
+    if (path === '/api2/json/access/roles' && request.method === 'GET') {
+      return answer([{ roleid: 'PVEAdmin', privs: 'Permissions.Modify,Sys.Modify' }, { roleid: 'DSHOperator', privs: 'VM.Audit,VM.PowerMgmt' }]);
+    }
+    if (path === '/api2/json/access/roles' && request.method === 'POST') return answer(null);
+    if (path === '/api2/json/access/roles/DSHOperator') {
+      if (request.method === 'GET') return answer({ roleid: 'DSHOperator', privs: 'VM.Audit,VM.PowerMgmt' });
+      if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
+    }
+    if (path === '/api2/json/access/acl' && request.method === 'GET') {
+      return answer([{ path: '/', roleid: 'PVEAdmin', type: 'token', ugid: 'root@pam!dsh', propagate: 1 }]);
+    }
+    if (path === '/api2/json/access/acl' && request.method === 'PUT') return answer(null);
+    if (path === `/api2/json/access/users/${encodeURIComponent('root@pam')}/token` && request.method === 'GET') {
+      return answer([{ tokenid: 'dsh', comment: 'DeepSeek Harness (dsh-pve-vm)' }]);
+    }
+    if (path === `/api2/json/access/users/${encodeURIComponent('root@pam')}/token/dsh-admin` && request.method === 'POST') {
+      return answer({ tokenid: 'dsh-admin', value: 'secret-value-123', privsep: 1 });
+    }
+    if (path === `/api2/json/access/users/${encodeURIComponent('root@pam')}/token/dsh-admin` && request.method === 'DELETE') {
+      return answer(null);
     }
     return answer({ message: `unexpected ${request.method} ${path}` }, 500);
   });
@@ -208,6 +247,13 @@ await checkAsync('pvesh create returns the UPID as stdout so the tools keep pars
   assert.deepEqual(JSON.parse(call.body), { vmid: 104, storage: 'local' });
 });
 
+
+
+await checkAsync('a bare 403 is explained as a missing privilege', async () => {
+  await assert.rejects(async () => {
+    await controller.pveshGet('/forbidden');
+  }, (error) => error.code === 'API_DENIED' && /permission denied/.test(error.message) && /role/.test(error.message));
+});
 
 await checkAsync('a bare token secret fails as BAD_ARGUMENT before any request', async () => {
   const broken = withSshFallback(
@@ -420,6 +466,107 @@ await checkAsync('storage_content import-disk asks for confirmation before touch
   const first = await contentTool.execute({ action: 'import-disk', storage: 'local-lvm', vmid: 104, source: '/tmp/disk.qcow2' }, {});
   assert.equal(first.status, 'confirmation-required');
   assert.match(first.summary, /import/i);
+});
+
+
+const access = accessTools(toolDeps);
+const byTool = (name) => byName(access, name);
+
+await checkAsync('pve_user lists and reads one user', async () => {
+  const tool = byTool('pve_user');
+  const all = await tool.execute({ action: 'list' }, {});
+  assert.deepEqual(all.users.map((entry) => entry.userid), ['root@pam', 'ci@pve']);
+  const one = await tool.execute({ action: 'get', userid: 'ci@pve' }, {});
+  assert.equal(one.user.groups, 'ci');
+});
+
+await checkAsync('pve_user create is gated and posts the account', async () => {
+  const tool = byTool('pve_user');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'create', userid: 'ops@pve', password: 'x'.repeat(12), groups: 'ci' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'POST').length, 0);
+  const done = await tool.execute({ action: 'create', userid: 'ops@pve', password: 'x'.repeat(12), groups: 'ci', confirm: first.confirm }, {});
+  assert.equal(done.userid, 'ops@pve');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/access/users');
+  const body = JSON.parse(post.body);
+  assert.equal(body.userid, 'ops@pve');
+  assert.equal(body.groups, 'ci');
+  assert.equal(body.password.length, 12);
+});
+
+await checkAsync('pve_user rejects a user id without a realm', async () => {
+  const tool = byTool('pve_user');
+  await assert.rejects(async () => {
+    await tool.execute({ action: 'get', userid: 'root' }, {});
+  }, /name@realm/);
+});
+
+await checkAsync('pve_role create is gated and sends the privilege list', async () => {
+  const tool = byTool('pve_role');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'create', roleid: 'DSHOperator', privs: 'VM.Audit, VM.PowerMgmt' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const done = await tool.execute({ action: 'create', roleid: 'DSHOperator', privs: 'VM.Audit, VM.PowerMgmt', confirm: first.confirm }, {});
+  assert.equal(done.privs, 'VM.Audit,VM.PowerMgmt');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/access/roles');
+  assert.deepEqual(JSON.parse(post.body), { roleid: 'DSHOperator', privs: 'VM.Audit,VM.PowerMgmt' });
+});
+
+await checkAsync('pve_role update append keeps the existing privileges', async () => {
+  const tool = byTool('pve_role');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'update', roleid: 'DSHOperator', privs: 'VM.Console', append: true }, {});
+  const done = await tool.execute({ action: 'update', roleid: 'DSHOperator', privs: 'VM.Console', append: true, confirm: first.confirm }, {});
+  assert.equal(done.privs, 'VM.Audit,VM.PowerMgmt,VM.Console');
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path === '/api2/json/access/roles/DSHOperator');
+  assert.deepEqual(JSON.parse(put.body), { privs: 'VM.Audit,VM.PowerMgmt,VM.Console' });
+});
+
+await checkAsync('pve_acl set is gated and grants exactly one subject', async () => {
+  const tool = byTool('pve_acl');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'set', path: '/vms/104', tokens: 'root@pam!dsh', roles: 'PVEAdmin' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'set', path: '/vms/104', tokens: 'root@pam!dsh', roles: 'PVEAdmin', confirm: first.confirm }, {});
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path === '/api2/json/access/acl');
+  assert.deepEqual(JSON.parse(put.body), { path: '/vms/104', roles: 'PVEAdmin', tokens: 'root@pam!dsh', propagate: 1 });
+});
+
+await checkAsync('pve_acl remove puts delete=1 on the same endpoint', async () => {
+  const tool = byTool('pve_acl');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'remove', path: '/vms/104', tokens: 'root@pam!dsh', roles: 'PVEAdmin' }, {});
+  await tool.execute({ action: 'remove', path: '/vms/104', tokens: 'root@pam!dsh', roles: 'PVEAdmin', confirm: first.confirm }, {});
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path === '/api2/json/access/acl');
+  assert.equal(JSON.parse(put.body).delete, 1);
+});
+
+await checkAsync('pve_acl refuses two subject kinds at once', async () => {
+  const tool = byTool('pve_acl');
+  await assert.rejects(async () => {
+    await tool.execute({ action: 'set', path: '/', users: 'root@pam', groups: 'ci', roles: 'PVEAdmin' }, {});
+  }, /exactly one of/);
+});
+
+await checkAsync('pve_token create is gated and returns the one-time secret', async () => {
+  const tool = byTool('pve_token');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'create', userid: 'root@pam', tokenid: 'dsh-admin' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const done = await tool.execute({ action: 'create', userid: 'root@pam', tokenid: 'dsh-admin', confirm: first.confirm }, {});
+  assert.equal(done.secret, 'secret-value-123');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/token/dsh-admin'));
+  assert.deepEqual(JSON.parse(post.body), { tokenid: 'dsh-admin' });
+});
+
+await checkAsync('pve_token remove is gated and deletes the token path', async () => {
+  const tool = byTool('pve_token');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'remove', userid: 'root@pam', tokenid: 'dsh-admin' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'remove', userid: 'root@pam', tokenid: 'dsh-admin', confirm: first.confirm }, {});
+  assert.ok(seen.some((entry) => entry.method === 'DELETE' && entry.path.endsWith('/token/dsh-admin')));
 });
 
 controller.closeAll();
