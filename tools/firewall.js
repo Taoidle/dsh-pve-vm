@@ -14,7 +14,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { instanceOf, withInstance } from '../lib/instances.js';
 import { runGuarded } from '../lib/confirm.js';
-import { PLAIN_SCHEMA, textOutput } from '../lib/tool-output.js';
+import { PLAIN_SCHEMA, renderValue } from '../lib/tool-output.js';
 import { VmError } from '../lib/session.js';
 import { armRollback, canCommitConfirm, cancelRollback, probeApi, rollbackId, runDetached } from '../lib/netguard.js';
 
@@ -119,7 +119,7 @@ export function firewallTools(deps) {
         timeout_sec: { type: 'number', description: 'Rollback delay, 30–900 seconds (default 180).' },
         confirm: { type: 'string', description: 'The token from the first call, for every write.' },
       },
-      output: { schema: PLAIN_SCHEMA, render: textOutput },
+      output: { schema: PLAIN_SCHEMA, render: renderValue },
       async execute(args, exec) {
         const { controller, settings, name } = instanceOf(deps, args);
         const signal = exec?.signal;

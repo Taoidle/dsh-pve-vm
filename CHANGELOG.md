@@ -3,6 +3,22 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.9.2] — 2026-11-11
+
+### Fixed
+
+- Tool answers could contain `undefined` members (`guest` on a cluster-wide firewall answer, `swap` on a
+  node without swap), which the harness rejects as "not lossless JSON". The instance mapper now prunes
+  them once for every tool, and the offline suite round-trips a firewall answer to prove it.
+
+## [0.9.1] — 2026-11-11
+
+### Fixed
+
+- `node_network` and `pve_firewall` used the text renderer with an object value, so every answer reached
+  the agent as `[object Object]`. They now render the JSON of the answer, and the offline suite checks
+  that both render objects as text.
+
 ## [0.9.0] — 2026-11-11
 
 ### Added

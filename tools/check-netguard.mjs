@@ -92,6 +92,25 @@ const byName = (list, name) => {
   return found;
 };
 
+await checkAsync('pve_firewall status answers lossless JSON (no undefined members)', async () => {
+  const { controller } = makeController();
+  const tool = byName(firewallTools(makeDeps(controller)), 'pve_firewall');
+  const out = await tool.execute({ scope: 'cluster', action: 'status' }, {});
+  assert.equal('guest' in out, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(out)), out);
+});
+
+await checkAsync('the new tools render their answers as text, not [object Object]', async () => {
+  const { controller } = makeController();
+  for (const tool of [byName(networkTools(makeDeps(controller)), 'node_network'), byName(firewallTools(makeDeps(controller)), 'pve_firewall')]) {
+    const blocks = tool.output.render({ action: 'list' }, { action: 'list', node: 'pve-ci' });
+    assert.equal(blocks.length, 1);
+    assert.equal(blocks[0].type, 'text');
+    assert.match(blocks[0].text, /"node": "pve-ci"/);
+    assert.ok(!blocks[0].text.includes('[object Object]'), `${tool.name} rendered an object as [object Object]`);
+  }
+});
+
 await checkAsync('node_network list reports interfaces, the pending file and the management interface', async () => {
   const { controller } = makeController();
   const tool = byName(networkTools(makeDeps(controller)), 'node_network');
