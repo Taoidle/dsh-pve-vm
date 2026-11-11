@@ -20,6 +20,11 @@ import { backupJobTools } from './backup-jobs.js';
 import { poolTools } from './pools.js';
 import { storageAdminTools } from './storage-admin.js';
 import { accessTools } from './access.js';
+import { storageTools } from './storage.js';
+import { vmDetailTools } from './vm-detail.js';
+import { guestExtraTools } from './guest-extra.js';
+import { passthroughTools } from './passthrough.js';
+import { lxcExtraTools } from './lxc-extra.js';
 
 const problems = [];
 const check = (name, fn) => {
@@ -70,7 +75,33 @@ const server = http.createServer((request, response) => {
     if (path === '/api2/json/nodes/pve-ci/qemu/104/status/current') return answer({ status: 'stopped' });
     if (path === '/api2/json/nodes/pve-2/qemu/104/status/shutdown') return answer(UPID);
     if (path === '/api2/json/nodes/pve-2/qemu/104/resize') return answer(UPID);
-    if (path === '/api2/json/nodes/pve-2/qemu/104/config') return answer({ scsi0: 'local-lvm:vm-104-disk-1,size=8G' });
+    if (path === '/api2/json/nodes/pve-2/qemu/104/config') {
+      return answer({
+        scsi0: 'local-lvm:vm-104-disk-1,size=8G',
+        unused0: 'local-lvm:vm-104-disk-9',
+        hostpci2: '0000:01:00.0',
+        usb0: 'host=1-2',
+      });
+    }
+    if (path === '/api2/json/nodes/pve-2/qemu/104/pending') return answer([{ key: 'scsi1', value: 'local-lvm:vm-104-disk-2', pending: 'delete' }]);
+    if (path === '/api2/json/nodes/pve-2/qemu/104/unlink') return answer(null);
+    if (path === '/api2/json/nodes/pve-2/qemu/104/rrddata') return answer([{ time: 1700000000, cpu: 0.12, mem: 1024 }]);
+    if (path === '/api2/json/nodes/pve-2/qemu/104/feature') return answer({ hasFeature: 1, nodes: ['pve-2'] });
+    if (path === '/api2/json/nodes/pve-2/qemu/104/cloudinit') {
+      if (request.method === 'PUT') return answer(null);
+      return answer({ ciuser: { old: 'debian', new: 'debian' } });
+    }
+    if (path === '/api2/json/nodes/pve-2/qemu/104/cloudinit/dump') return answer('#cloud-config\nusers: []\n');
+    if (path === '/api2/json/nodes/pve-2/qemu/104/agent/fsfreeze-freeze') return answer({ frozen: true });
+    if (path === '/api2/json/nodes/pve-2/qemu/104/agent/fsfreeze-thaw') return answer({ frozen: false });
+    if (path === '/api2/json/nodes/pve-2/qemu/104/agent/set-user-password') return answer({ result: null });
+    if (path === '/api2/json/nodes/pve-2/qemu/104/agent/exec') return answer({ pid: 4242 });
+    if (path === '/api2/json/nodes/pve-2/qemu/104/agent/exec-status') return answer({ exited: true, exitcode: 0, 'out-data': 'hi\n' });
+    if (path === '/api2/json/nodes/pve-2/qemu/104/agent/get-osinfo') return answer({ result: { id: 'debian', 'pretty-name': 'Debian GNU/Linux 12' } });
+    if (path === '/api2/json/nodes/pve-2/qemu/104/agent/get-fsinfo') return answer({ result: [{ name: '/', type: 'ext4' }] });
+    if (path === '/api2/json/nodes/pve-2/qemu/104/agent/network-get-interfaces') return answer({ result: [{ name: 'eth0' }] });
+    if (path === '/api2/json/nodes/pve-ci/hardware/pci') return answer([{ id: '0000:01:00.0', vendor_name: 'NVIDIA', device_name: 'GA102' }]);
+    if (path === '/api2/json/nodes/pve-ci/hardware/usb') return answer([{ busnum: 1, devnum: 2, usbpath: '1-2', vendid: '1234', prodid: '5678', product: 'Keyboard' }]);
     if (path === `/api2/json/nodes/pve-2/tasks/${encodeURIComponent(UPID)}/status`) {
       return answer({ status: 'stopped', exitstatus: 'OK' });
     }
@@ -96,6 +127,13 @@ const server = http.createServer((request, response) => {
     if (path === '/api2/json/nodes/pve-ci/lxc/300/status/start') return answer(UPID);
     if (path === '/api2/json/nodes/pve-ci/lxc/300/status/shutdown') return answer(UPID);
     if (path === '/api2/json/nodes/pve-ci/lxc/300/config') return answer({ hostname: 'ct300', memory: 512 });
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/clone') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/migrate') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/resize') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/move_volume') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/template') return answer(null);
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/feature') return answer({ hasFeature: 1, nodes: ['pve-ci'] });
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/rrddata') return answer([{ time: 1700000000, cpu: 0.2 }]);
     if (path === '/api2/json/nodes/pve-ci/lxc/300/snapshot') return answer([{ name: 'snap1' }]);
     if (path === '/api2/json/storage') {
       if (request.method === 'POST') return answer(null);
@@ -567,6 +605,239 @@ await checkAsync('pve_token remove is gated and deletes the token path', async (
   assert.equal(first.status, 'confirmation-required');
   await tool.execute({ action: 'remove', userid: 'root@pam', tokenid: 'dsh-admin', confirm: first.confirm }, {});
   assert.ok(seen.some((entry) => entry.method === 'DELETE' && entry.path.endsWith('/token/dsh-admin')));
+});
+
+
+const diskTools = storageTools(toolDeps);
+const diskTool = byName(diskTools, 'vm_disk');
+
+await checkAsync('vm_disk list also reports detached unusedN volumes', async () => {
+  const out = await diskTool.execute({ vmid: 104, action: 'list' }, {});
+  const slots = out.disks.map((disk) => disk.slot);
+  assert.ok(slots.includes('scsi0'));
+  assert.ok(slots.includes('unused0'));
+  assert.equal(out.disks.find((disk) => disk.slot === 'unused0').unused, true);
+});
+
+await checkAsync('vm_disk unlink is gated and sends the idlist as PUT', async () => {
+  seen.length = 0;
+  const first = await diskTool.execute({ vmid: 104, action: 'unlink', slots: 'unused0' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.path.endsWith('/unlink')).length, 0);
+  const done = await diskTool.execute({ vmid: 104, action: 'unlink', slots: 'unused0', confirm: first.confirm }, {});
+  assert.deepEqual(done.slots, ['unused0']);
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/qemu/104/unlink'));
+  assert.deepEqual(JSON.parse(put.body), { idlist: 'unused0' });
+});
+
+await checkAsync('vm_disk pending-delete is gated and uses config delete', async () => {
+  seen.length = 0;
+  const first = await diskTool.execute({ vmid: 104, action: 'pending-delete', key: 'scsi1' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const done = await diskTool.execute({ vmid: 104, action: 'pending-delete', key: 'scsi1', confirm: first.confirm }, {});
+  assert.equal(done.key, 'scsi1');
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/qemu/104/config'));
+  assert.deepEqual(JSON.parse(put.body), { delete: 'scsi1' });
+  assert.ok(seen.some((entry) => entry.path.endsWith('/qemu/104/pending')));
+});
+
+const detailTool = byName(vmDetailTools(toolDeps), 'vm_detail');
+
+await checkAsync('vm_detail rrddata passes timeframe and uppercase cf', async () => {
+  seen.length = 0;
+  const out = await detailTool.execute({ vmid: 104, action: 'rrddata', timeframe: 'day', cf: 'max' }, {});
+  assert.equal(out.cf, 'MAX');
+  assert.equal(out.data.length, 1);
+  const call = seen.find((entry) => entry.path.endsWith('/qemu/104/rrddata'));
+  assert.match(call.query, /timeframe=day/);
+  assert.match(call.query, /cf=MAX/);
+});
+
+await checkAsync('vm_detail feature reports support and the answering nodes', async () => {
+  seen.length = 0;
+  const out = await detailTool.execute({ vmid: 104, action: 'feature', feature: 'snapshot' }, {});
+  assert.equal(out.supported, true);
+  assert.deepEqual(out.nodes, ['pve-2']);
+  const call = seen.find((entry) => entry.path.endsWith('/qemu/104/feature'));
+  assert.match(call.query, /feature=snapshot/);
+});
+
+const guestTool = byName(guestExtraTools(toolDeps), 'vm_guest');
+
+await checkAsync('vm_guest cloudinit-dump returns the requested config as text', async () => {
+  seen.length = 0;
+  const out = await guestTool.execute({ vmid: 104, action: 'cloudinit-dump', type: 'network' }, {});
+  assert.match(out.text, /cloud-config/);
+  assert.match(seen.find((entry) => entry.path.endsWith('/cloudinit/dump')).query, /type=network/);
+});
+
+await checkAsync('vm_guest cloudinit-set is gated and writes fields then regenerates', async () => {
+  seen.length = 0;
+  const first = await guestTool.execute({ vmid: 104, action: 'cloudinit-set', settings: ['ciuser=debian'] }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'PUT').length, 0);
+  const done = await guestTool.execute({ vmid: 104, action: 'cloudinit-set', settings: ['ciuser=debian'], confirm: first.confirm }, {});
+  assert.deepEqual(done.fields, ['ciuser']);
+  const puts = seen.filter((entry) => entry.method === 'PUT');
+  assert.ok(puts.some((entry) => entry.path.endsWith('/qemu/104/config')));
+  assert.ok(puts.some((entry) => entry.path.endsWith('/qemu/104/cloudinit')));
+  assert.deepEqual(JSON.parse(puts.find((entry) => entry.path.endsWith('/config')).body), { ciuser: 'debian' });
+});
+
+await checkAsync('vm_guest fsfreeze freeze is gated and thaw stays available', async () => {
+  seen.length = 0;
+  const first = await guestTool.execute({ vmid: 104, action: 'fsfreeze', freeze: true }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.path.endsWith('/fsfreeze-freeze')).length, 0);
+  const done = await guestTool.execute({ vmid: 104, action: 'fsfreeze', freeze: true, confirm: first.confirm }, {});
+  assert.equal(done.frozen, true);
+  assert.ok(seen.some((entry) => entry.method === 'POST' && entry.path.endsWith('/agent/fsfreeze-freeze')));
+  const thaw = await guestTool.execute({ vmid: 104, action: 'fsfreeze', freeze: false }, {});
+  assert.equal(thaw.frozen, false);
+  assert.ok(seen.some((entry) => entry.path.endsWith('/agent/fsfreeze-thaw')));
+});
+
+await checkAsync('vm_guest password is gated and never echoes the secret', async () => {
+  seen.length = 0;
+  const secret = 'hunter2-secret';
+  const first = await guestTool.execute({ vmid: 104, action: 'password', user: 'root', password: secret }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.ok(!first.summary.includes(secret));
+  const done = await guestTool.execute({ vmid: 104, action: 'password', user: 'root', password: secret, confirm: first.confirm }, {});
+  assert.equal(done.user, 'root');
+  assert.ok(!JSON.stringify(done).includes(secret));
+  const post = seen.find((entry) => entry.path.endsWith('/agent/set-user-password'));
+  assert.deepEqual(JSON.parse(post.body), { username: 'root', password: secret });
+});
+
+await checkAsync('vm_guest exec is gated, NUL-joins argv and allow-lists the executable', async () => {
+  seen.length = 0;
+  await assert.rejects(
+    async () => guestTool.execute({ vmid: 104, action: 'exec', path: '/tmp/evil', args: [] }, {}),
+    /allow list/,
+  );
+  const first = await guestTool.execute({ vmid: 104, action: 'exec', path: '/bin/echo', args: ['hi there'] }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const done = await guestTool.execute({ vmid: 104, action: 'exec', path: '/bin/echo', args: ['hi there'], confirm: first.confirm }, {});
+  assert.equal(done.pid, 4242);
+  const post = seen.find((entry) => entry.path.endsWith('/agent/exec'));
+  assert.equal(JSON.parse(post.body).command, '/bin/echo\u0000hi there');
+});
+
+await checkAsync('vm_guest probes use the get-osinfo and network-get-interfaces endpoints', async () => {
+  seen.length = 0;
+  const os = await guestTool.execute({ vmid: 104, action: 'osinfo' }, {});
+  assert.equal(os.data.result.id, 'debian');
+  await guestTool.execute({ vmid: 104, action: 'interfaces' }, {});
+  assert.ok(seen.some((entry) => entry.path.endsWith('/agent/network-get-interfaces')));
+});
+
+const passTool = byName(passthroughTools(toolDeps), 'vm_passthrough');
+
+await checkAsync('vm_passthrough lists PCI and USB hardware on the node', async () => {
+  seen.length = 0;
+  const pci = await passTool.execute({ action: 'pci-list' }, {});
+  assert.equal(pci.devices[0].id, '0000:01:00.0');
+  const usb = await passTool.execute({ action: 'usb-list' }, {});
+  assert.equal(usb.devices[0].usbpath, '1-2');
+  assert.ok(seen.some((entry) => entry.path.endsWith('/hardware/pci')));
+  assert.ok(seen.some((entry) => entry.path.endsWith('/hardware/usb')));
+});
+
+await checkAsync('vm_passthrough pci-attach is gated and writes hostpciN with options', async () => {
+  seen.length = 0;
+  const first = await passTool.execute({ vmid: 104, action: 'pci-attach', slot: 3, id: '0000:02:00.0', pcie: true, xVga: true }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'PUT').length, 0);
+  const done = await passTool.execute({ vmid: 104, action: 'pci-attach', slot: 3, id: '0000:02:00.0', pcie: true, xVga: true, confirm: first.confirm }, {});
+  assert.equal(done.key, 'hostpci3');
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/qemu/104/config'));
+  assert.deepEqual(JSON.parse(put.body), { hostpci3: '0000:02:00.0,pcie=1,x-vga=1' });
+});
+
+await checkAsync('vm_passthrough usb-attach maps vendor:product to host=', async () => {
+  seen.length = 0;
+  const first = await passTool.execute({ vmid: 104, action: 'usb-attach', slot: 1, device: '1234:5678' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const done = await passTool.execute({ vmid: 104, action: 'usb-attach', slot: 1, device: '1234:5678', confirm: first.confirm }, {});
+  assert.equal(done.value, 'host=1234:5678');
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/qemu/104/config'));
+  assert.deepEqual(JSON.parse(put.body), { usb1: 'host=1234:5678' });
+});
+
+await checkAsync('vm_passthrough detach is gated and deletes the configured slot', async () => {
+  seen.length = 0;
+  const first = await passTool.execute({ vmid: 104, action: 'detach', kind: 'pci', slot: 2 }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.match(first.summary, /hostpci2/);
+  const done = await passTool.execute({ vmid: 104, action: 'detach', kind: 'pci', slot: 2, confirm: first.confirm }, {});
+  assert.equal(done.removed, '0000:01:00.0');
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/qemu/104/config'));
+  assert.deepEqual(JSON.parse(put.body), { delete: 'hostpci2' });
+});
+
+const extraLxc = lxcExtraTools(toolDeps);
+
+await checkAsync('lxc_clone posts the new id and awaits the task', async () => {
+  seen.length = 0;
+  const out = await byName(extraLxc, 'lxc_clone').execute({ vmid: 300, newid: 301, hostname: 'ct301', full: true }, {});
+  assert.equal(out.newid, 301);
+  assert.equal(out.upid, UPID);
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/lxc/300/clone'));
+  assert.deepEqual(JSON.parse(post.body), { newid: 301, hostname: 'ct301', full: 1 });
+  assert.ok(seen.some((entry) => entry.path.includes('/tasks/')));
+});
+
+await checkAsync('lxc_migrate is gated and posts the target', async () => {
+  seen.length = 0;
+  const tool = byName(extraLxc, 'lxc_migrate');
+  const first = await tool.execute({ vmid: 300, target: 'pve-2' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'POST' && entry.path.endsWith('/migrate')).length, 0);
+  const done = await tool.execute({ vmid: 300, target: 'pve-2', online: true, confirm: first.confirm }, {});
+  assert.equal(done.target, 'pve-2');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/lxc/300/migrate'));
+  assert.deepEqual(JSON.parse(post.body), { target: 'pve-2', online: 1 });
+});
+
+await checkAsync('lxc_resize puts the disk and size on the resize endpoint', async () => {
+  seen.length = 0;
+  const out = await byName(extraLxc, 'lxc_resize').execute({ vmid: 300, disk: 'mp0', size: '+8G' }, {});
+  assert.equal(out.disk, 'mp0');
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/lxc/300/resize'));
+  assert.deepEqual(JSON.parse(put.body), { disk: 'mp0', size: '+8G' });
+});
+
+await checkAsync('lxc_move_volume is gated and carries delete + storage', async () => {
+  seen.length = 0;
+  const tool = byName(extraLxc, 'lxc_move_volume');
+  const first = await tool.execute({ vmid: 300, volume: 'mp0', storage: 'local-lvm', deleteSource: true }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(first.risk, 'destroy');
+  const done = await tool.execute({ vmid: 300, volume: 'mp0', storage: 'local-lvm', deleteSource: true, confirm: first.confirm }, {});
+  assert.equal(done.deleted, true);
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/lxc/300/move_volume'));
+  assert.deepEqual(JSON.parse(post.body), { volume: 'mp0', storage: 'local-lvm', delete: 1 });
+});
+
+await checkAsync('lxc_template is gated and posts template', async () => {
+  seen.length = 0;
+  const tool = byName(extraLxc, 'lxc_template');
+  const first = await tool.execute({ vmid: 300 }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const done = await tool.execute({ vmid: 300, confirm: first.confirm }, {});
+  assert.equal(done.template, true);
+  assert.ok(seen.some((entry) => entry.method === 'POST' && entry.path.endsWith('/lxc/300/template')));
+});
+
+await checkAsync('lxc_feature and lxc_rrddata read their endpoints', async () => {
+  seen.length = 0;
+  const feat = await byName(extraLxc, 'lxc_feature').execute({ vmid: 300, feature: 'snapshot' }, {});
+  assert.equal(feat.supported, true);
+  const rrd = await byName(extraLxc, 'lxc_rrddata').execute({ vmid: 300, timeframe: 'hour' }, {});
+  assert.equal(rrd.data.length, 1);
+  assert.ok(seen.some((entry) => entry.path.endsWith('/lxc/300/feature')));
+  assert.ok(seen.some((entry) => entry.path.endsWith('/lxc/300/rrddata')));
 });
 
 controller.closeAll();

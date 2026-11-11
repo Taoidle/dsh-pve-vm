@@ -3,6 +3,34 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `vm_detail` — read-only RRD history (`rrddata`, with `timeframe` and `cf`) and the
+  `snapshot`/`clone`/`copy` feature probe, so support can be checked before an operation.
+- `vm_guest` — cloud-init read/dump/set/delete, guest filesystem freeze/thaw, guest user password,
+  allow-listed `exec` plus `exec-status`, and the OS/filesystem/interface probes over the QEMU agent.
+  Exactly one guest password endpoint exists on PVE 7.4 (`agent/set-user-password`) and the password is
+  never echoed back.
+- `vm_passthrough` — node PCI/USB hardware lists and `hostpciN`/`usbN` attach or detach. Attach is
+  danger, detach destroy; both go through the confirmation token. PCI changes need a stopped VM.
+- `vm_disk` — `unlink`, `pending-delete`, and detached `unusedN` volumes in `list`.
+- `lxc_clone`, `lxc_migrate`, `lxc_resize`, `lxc_move_volume`, `lxc_template`, `lxc_feature` and
+  `lxc_rrddata`; the task-returning calls await their UPID.
+
+### Changed
+
+- PVE 7.4 has no `DELETE /nodes/{node}/qemu/{vmid}/pending`: `pending-delete` performs the same
+  `qm set --delete` operation through `PUT /config` with `delete=<key>`.
+- PVE 7.4 has no per-VM `fsfreeze` or `password` endpoints: `vm_guest` uses the agent's
+  `fsfreeze-freeze`, `fsfreeze-thaw` and `set-user-password` calls. Thawing is deliberately not gated,
+  so a frozen guest can always be released.
+- `PUT /cloudinit` on 7.4 only regenerates the drive; `cloudinit-set`/`cloudinit-pending` write the
+  fields (or `delete`) through `PUT /config` and then regenerate.
+- `lxc_feature` is read-only: 7.4 exposes `GET .../feature` but no write endpoint; container feature
+  flags remain config keys.
+
 ## [0.9.2] — 2026-11-11
 
 ### Fixed
