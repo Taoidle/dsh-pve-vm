@@ -57,6 +57,18 @@ window.__ModuleLoader__.load({
         'hosts.nameHint': 'Так инструменты называют этот узел, например lab.',
         'hosts.description': 'Заметка',
         'hosts.descriptionHint': 'Необязательно; показывается на карточке.',
+        "hosts.apiUrl": "API",
+        "hosts.apiUrlHint": "Например https://10.0.0.10:8006. Пусто — только ssh.",
+        "hosts.apiToken": "API-токен",
+        "hosts.apiTokenHint": "user@realm!tokenid=secret. Пусто — оставить прежний; без токена плагин работает через ssh.",
+        "hosts.apiTlsFingerprint": "Отпечаток TLS",
+        "hosts.apiTlsFingerprintHint": "sha256 сертификата узла. Пусто — обычная проверка; самоподписанному узлу нужен отпечаток или небезопасный TLS.",
+        "hosts.apiInsecureTls": "Не проверять TLS",
+        "hosts.node": "Узел",
+        "hosts.nodeHint": "Имя узла для apt, служб и хранилищ. Пусто — спросить у API.",
+        "hosts.mode": "Транспорт",
+        "hosts.modeHint": "auto | api | ssh. auto — API, если токен задан.",
+        "hosts.badApiUrl": "API-адрес должен начинаться с http:// или https://.",
         'hosts.defaultBadge': 'по умолчанию',
         'hosts.makeDefault': 'Сделать основным',
         'hosts.edit': 'Изменить',
@@ -171,6 +183,18 @@ window.__ModuleLoader__.load({
         'hosts.nameHint': 'How the tools refer to this host, for example lab.',
         'hosts.description': 'Note',
         'hosts.descriptionHint': 'Optional; shown on this card.',
+        "hosts.apiUrl": "API URL",
+        "hosts.apiUrlHint": "For example https://10.0.0.10:8006. Empty — ssh only.",
+        "hosts.apiToken": "API token",
+        "hosts.apiTokenHint": "user@realm!tokenid=secret. Empty — keep the stored one; without a token the plugin uses ssh.",
+        "hosts.apiTlsFingerprint": "TLS fingerprint",
+        "hosts.apiTlsFingerprintHint": "sha256 of the node certificate. Empty — verify normally; a self-signed node needs the pin or insecure TLS.",
+        "hosts.apiInsecureTls": "Skip TLS verification",
+        "hosts.node": "Node",
+        "hosts.nodeHint": "Node name for apt, services and storage. Empty — ask the API.",
+        "hosts.mode": "Transport",
+        "hosts.modeHint": "auto | api | ssh. auto — API when a token is set.",
+        "hosts.badApiUrl": "The API URL must start with http:// or https://.",
         'hosts.defaultBadge': 'default',
         'hosts.makeDefault': 'Make default',
         'hosts.edit': 'Edit',
@@ -285,6 +309,18 @@ window.__ModuleLoader__.load({
         'hosts.nameHint': '工具用这个名字指向这台主机，例如 lab。',
         'hosts.description': '备注',
         'hosts.descriptionHint': '可选，显示在卡片上。',
+        "hosts.apiUrl": "API 地址",
+        "hosts.apiUrlHint": "例如 https://10.0.0.10:8006。留空——只用 ssh。",
+        "hosts.apiToken": "API 令牌",
+        "hosts.apiTokenHint": "user@realm!tokenid=secret。留空——保留已存的；没有令牌时走 ssh。",
+        "hosts.apiTlsFingerprint": "TLS 指纹",
+        "hosts.apiTlsFingerprintHint": "节点证书的 sha256。留空——正常校验；自签证书的节点需要指纹或跳过校验。",
+        "hosts.apiInsecureTls": "跳过 TLS 校验",
+        "hosts.node": "节点名",
+        "hosts.nodeHint": "apt、服务和存储使用的节点名。留空——向 API 询问。",
+        "hosts.mode": "传输",
+        "hosts.modeHint": "auto | api | ssh。auto——有令牌时用 API。",
+        "hosts.badApiUrl": "API 地址必须以 http:// 或 https:// 开头。",
         'hosts.defaultBadge': '默认',
         'hosts.makeDefault': '设为默认',
         'hosts.edit': '编辑',
@@ -393,6 +429,12 @@ window.__ModuleLoader__.load({
       { name: 'sshKeyPath', kind: 'text', labelKey: 'field.sshKeyPath', hintKey: 'field.sshKeyPathHint' },
       { name: 'sshConfigFile', kind: 'text', labelKey: 'field.sshConfigFile', hintKey: 'field.sshConfigFileHint' },
       { name: 'sshExtraOptions', kind: 'list', labelKey: 'field.sshExtraOptions', hintKey: 'field.sshExtraOptionsHint' },
+      { name: 'apiUrl', kind: 'text', labelKey: 'hosts.apiUrl', hintKey: 'hosts.apiUrlHint' },
+      { name: 'apiToken', kind: 'text', labelKey: 'hosts.apiToken', hintKey: 'hosts.apiTokenHint' },
+      { name: 'apiTlsFingerprint', kind: 'text', labelKey: 'hosts.apiTlsFingerprint', hintKey: 'hosts.apiTlsFingerprintHint' },
+      { name: 'apiInsecureTls', kind: 'boolean', labelKey: 'hosts.apiInsecureTls' },
+      { name: 'node', kind: 'text', labelKey: 'hosts.node', hintKey: 'hosts.nodeHint' },
+      { name: 'mode', kind: 'text', labelKey: 'hosts.mode', hintKey: 'hosts.modeHint' },
       { name: 'allowVmids', kind: 'numberList', labelKey: 'field.allowVmids', hintKey: 'hosts.allowVmidsHint' },
       { name: 'description', kind: 'text', labelKey: 'hosts.description', hintKey: 'hosts.descriptionHint' },
     ];
@@ -558,7 +600,10 @@ window.__ModuleLoader__.load({
       const startEdit = (index) => {
         setPendingRemove(null);
         setError(null);
-        setEditing({ index, draft: { ...HOST_DEFAULTS, ...instances[index] } });
+        // The token is a secret the node shows once: do not paint it back into the
+        // form. An empty field keeps the stored one (see save()).
+        const stored = { ...HOST_DEFAULTS, ...instances[index] };
+        setEditing({ index, draft: { ...stored, apiToken: '' } });
       };
 
       const cancel = () => {
@@ -599,8 +644,20 @@ window.__ModuleLoader__.load({
           setError(t('hosts.duplicate', { name }));
           return;
         }
+        const apiUrl = String(typed.apiUrl ?? '').trim();
+        if (apiUrl.length > 0 && !/^https?:\/\//.test(apiUrl)) {
+          setError(t('hosts.badApiUrl'));
+          return;
+        }
+        const storedToken = editing.index === null ? '' : String(instances[editing.index]?.apiToken ?? '');
+        const apiToken = String(typed.apiToken ?? '').trim() || storedToken;
         const entry = {
           ...typed,
+          apiUrl,
+          apiToken,
+          node: String(typed.node ?? '').trim(),
+          mode: String(typed.mode ?? 'auto').trim().toLowerCase() || 'auto',
+          apiInsecureTls: typed.apiInsecureTls === true,
           name,
           sshHost,
           sshUser: String(typed.sshUser ?? '').trim() || HOST_DEFAULTS.sshUser,
@@ -723,19 +780,26 @@ window.__ModuleLoader__.load({
                 jsxs('div', {
                   className: 'pve-vm-controls',
                   children: [
-                    jsx(Input, {
-                      value:
-                        typeof editing.draft[field.name] === 'string'
-                          ? editing.draft[field.name]
-                          : toInput(field, editing.draft[field.name]),
-                      disabled: !writable,
-                      spellCheck: false,
-                      inputMode: field.kind === 'number' || field.kind === 'numberList' ? 'numeric' : undefined,
-                      onChange: (event) => setField(field, event.target.value),
-                      onKeyDown: (event) => {
-                        if (event.key === 'Enter') save();
-                      },
-                    }),
+                    field.kind === 'boolean'
+                      ? jsx(Checkbox, {
+                          checked: editing.draft[field.name] === true,
+                          disabled: !writable,
+                          label: '',
+                          onChange: (next) => setField(field, next),
+                        })
+                      : jsx(Input, {
+                          value:
+                            typeof editing.draft[field.name] === 'string'
+                              ? editing.draft[field.name]
+                              : toInput(field, editing.draft[field.name]),
+                          disabled: !writable,
+                          spellCheck: false,
+                          inputMode: field.kind === 'number' || field.kind === 'numberList' ? 'numeric' : undefined,
+                          onChange: (event) => setField(field, event.target.value),
+                          onKeyDown: (event) => {
+                            if (event.key === 'Enter') save();
+                          },
+                        }),
                     field.hintKey ? jsx('div', { className: 'pve-vm-hint', children: t(field.hintKey) }) : null,
                   ],
                 }),

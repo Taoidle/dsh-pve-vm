@@ -171,6 +171,17 @@ const click = async (text) => {
   await settle();
 };
 const inputs = () => uniq(flatten(nodes).filter((n) => n.type === 'input'));
+
+// Editor rows are labelled, so find an input by its label instead of by position:
+// the field list has grown (API transport fields are part of a host now) and a
+// numeric index would silently point at another field.
+const fieldIndex = (label) => {
+  const rows = uniq(flatten(nodes).filter((n) => n.props?.className === 'pve-vm-edit-row'));
+  const row = rows.find((candidate) => flatten(candidate.props.children).some((child) => labelOf(child) === label));
+  if (!row) throw new Error(`no editor row "${label}"; have ${rows.map((r) => flatten(r.props.children).map(labelOf).join('/')).join(' | ')}`);
+  const input = flatten(row.props.children).find((child) => child.type === 'input');
+  return inputs().indexOf(input);
+};
 const typeInto = async (index, text) => { inputs()[index].props.onChange?.({ target: { value: text } }); await settle(); nodes = root.nodes = root.render(); await settle(); };
 
 // Feed one keystroke at a time, like a person typing. A draft that re-parses on every
@@ -199,33 +210,36 @@ check(!texts().includes('Proxmox host'), 'an ssh-host field is editable without 
 /* 2. add a host, fill name + address, save. */
 await click('Add host');
 check(inputs().length >= 9, `editor: expected at least 9 inputs, got ${inputs().length}`);
-await typeInto(0, 'lab');
-await typeInto(1, '10.0.0.11');
+await typeInto(fieldIndex('Name'), 'lab');
+await typeInto(fieldIndex('Proxmox host'), '10.0.0.11');
+await typeInto(fieldIndex('API URL'), 'https://10.0.0.11:8006');
 // Type it keystroke by keystroke: the full-width comma and the spaces must survive
 // each onChange, not be normalised away before the next character arrives.
-await typeChars(7, '100，101, 102');
-check(inputs()[7].props.value === '100，101, 102', `separator lost while typing: ${JSON.stringify(inputs()[7].props.value)}`);
+await typeChars(fieldIndex('Allowed VMs'), '100，101, 102');
+check(inputs()[fieldIndex('Allowed VMs')].props.value === '100，101, 102', `separator lost while typing: ${JSON.stringify(inputs()[fieldIndex('Allowed VMs')].props.value)}`);
 await click('Save');
 const firstWrite = writes.find(([key]) => key === 'instances');
 check(firstWrite !== undefined, 'save wrote no instances');
 check(firstWrite?.[1]?.[0]?.name === 'lab' && firstWrite?.[1]?.[0]?.sshHost === '10.0.0.11', `saved entry ${JSON.stringify(firstWrite?.[1]?.[0])}`);
 check(firstWrite?.[1]?.[0]?.sshUser === 'root' && firstWrite?.[1]?.[0]?.sshPort === 22, 'defaults not applied to the entry');
+check(firstWrite?.[1]?.[0]?.apiUrl === 'https://10.0.0.11:8006', `API URL not saved: ${JSON.stringify(firstWrite?.[1]?.[0]?.apiUrl)}`);
+check(firstWrite?.[1]?.[0]?.mode === 'auto', `transport not defaulted: ${JSON.stringify(firstWrite?.[1]?.[0]?.mode)}`);
 const allow = firstWrite?.[1]?.[0]?.allowVmids;
 check(Array.isArray(allow) && allow.join(',') === '100,101,102', `allow-list parsed as ${JSON.stringify(allow)}`);
 
 /* 3. validation: a duplicate name is refused and nothing is written. */
 const before = writes.length;
 await click('Add host');
-await typeInto(0, 'lab');
-await typeInto(1, '10.0.0.12');
+await typeInto(fieldIndex('Name'), 'lab');
+await typeInto(fieldIndex('Proxmox host'), '10.0.0.12');
 await click('Save');
 check(writes.length === before, 'duplicate name was written');
 check(texts().includes('The name lab is already taken.'), 'duplicate error not shown');
 
 /* 4. a second host, then make it default. */
-await typeInto(0, 'office');
-await typeInto(1, 'office-pve');
-await typeInto(3, '2222');
+await typeInto(fieldIndex('Name'), 'office');
+await typeInto(fieldIndex('Proxmox host'), 'office-pve');
+await typeInto(fieldIndex('SSH port'), '2222');
 await click('Save');
 check(value.instances.length === 2, `expected 2 instances, got ${value.instances?.length}`);
 check(value.instances[1].sshPort === 2222, `port not parsed: ${value.instances[1].sshPort}`);
@@ -246,11 +260,21 @@ await click('Save');
 check(value.instances[0].name === 'lab2', `rename failed: ${JSON.stringify(value.instances)}`);
 check(value.defaultInstance === 'lab2', `default after renaming the default host: ${value.defaultInstance}`);
 
+/* 6. the token is a secret: editing a host without retyping it keeps the stored one. */
+value = { ...value, instances: value.instances.map((entry, index) => (index === 0 ? { ...entry, apiToken: 'root@pam!dsh=secret' } : entry)) };
+for (const notify of [...subscribers]) notify();
+await settle();
+nodes = root.nodes = root.render();
+await click('Edit');
+await click('Save');
+const tokenWrite = writes.filter(([key]) => key === 'instances').at(-1)?.[1]?.[0];
+check(tokenWrite?.apiToken === 'root@pam!dsh=secret', `stored token was not kept: ${JSON.stringify(tokenWrite?.apiToken)}`);
+
 /* 7. a non-numeric id is refused, not dropped: the draft survives the failed save. */
 const beforeBad = writes.length;
 await click('Edit');
-await typeChars(7, ', abc101');
-check(inputs()[7].props.value.endsWith('abc101'), `draft lost on a bad token: ${JSON.stringify(inputs()[7].props.value)}`);
+await typeChars(fieldIndex('Allowed VMs'), ', abc101');
+check(inputs()[fieldIndex('Allowed VMs')].props.value.endsWith('abc101'), `draft lost on a bad token: ${JSON.stringify(inputs()[fieldIndex('Allowed VMs')].props.value)}`);
 await click('Save');
 check(writes.length === beforeBad, 'a bad id was written anyway');
 check(texts().some((text) => text.includes('Not VM ids: abc101')), 'bad-id error not shown');

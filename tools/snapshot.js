@@ -56,7 +56,7 @@ export function snapshotTools(deps) {
       async execute(args, exec) {
         const { controller, name } = instanceOf(deps, args);
         const vmid = controller.assertAllowed(args.vmid);
-        const node = await controller.nodeName();
+        const node = await controller.nodeFor(vmid);
         if (args.action === 'list') {
           const snapshots = await controller.pveshGet(`/nodes/${node}/qemu/${vmid}/snapshot`, {}, { signal: exec?.signal });
           return { vmid, instance: name, snapshots };
@@ -120,7 +120,7 @@ export function snapshotTools(deps) {
       async execute(args, exec) {
         const { controller, name } = instanceOf(deps, args);
         const vmid = controller.assertAllowed(args.vmid);
-        const node = await controller.nodeName();
+        const node = await controller.nodeFor(vmid);
         if (args.action === 'get') {
           const config = await controller.pveshGet(`/nodes/${node}/qemu/${vmid}/config`, {}, { signal: exec?.signal });
           return { vmid, instance: name, config };

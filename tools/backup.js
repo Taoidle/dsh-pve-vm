@@ -75,9 +75,9 @@ export function backupTools(deps) {
       timeoutMs: 1_800_000,
       async execute(args, exec) {
         const { controller, name } = instanceOf(deps, args);
-        const node = await controller.nodeName();
         const action = args.action;
         if (action === 'list') {
+          const node = await controller.nodeName();
           const tasks = await controller.pveshGet(
             `/nodes/${node}/tasks`,
             { typefilter: 'vzdump', limit: 200 },
@@ -87,6 +87,7 @@ export function backupTools(deps) {
         }
         const vmid = controller.assertAllowed(args.vmid);
         if (action === 'start') {
+          const node = await controller.nodeFor(vmid);
           const result = await controller.pvesh('create', `/nodes/${node}/vzdump`, {
             params: {
               vmid,

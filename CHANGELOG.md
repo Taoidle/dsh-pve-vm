@@ -3,6 +3,28 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.5.0] — 2026-11-11
+
+### Added
+
+* **API transport.** A host card can carry `apiUrl` / `apiToken` (`user@realm!tokenid=secret`), plus
+  `mode` (`auto` | `api` | `ssh`), `node`, `apiTlsFingerprint` and `apiInsecureTls`. With a token the
+  management plane speaks the Proxmox API: `qm` verbs map onto REST calls, long operations (start,
+  destroy, clone, migrate, backup) are awaited through their task, and `qmrestore` becomes a POST on
+  the VM endpoint. The console and the guest agent keep using ssh.
+* **Cluster-wide placement.** `nodeFor(vmid)` reads `/cluster/resources`, so snapshots, disks,
+  configuration and backups work on a VM that lives on another node than the entry points at. The ssh
+  transport answers with its own node, as before.
+* **Token validation by shape.** A bare secret is refused with the expected
+  `user@realm!tokenid=secret` form instead of a 401 that says nothing.
+* `tools/check-api.mjs`: a local HTTP server pins the token header, the `pveshGet` answer shape, the
+  `qm` → REST translation, UPID awaiting and the fingerprint normalisation.
+
+### Changed
+
+* The host card grew the API fields; the API token is never painted back into the form — leaving the
+  field empty keeps the stored secret.
+
 ## [0.4.0] — 2026-11-11
 
 ### Added

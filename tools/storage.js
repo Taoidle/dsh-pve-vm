@@ -69,7 +69,7 @@ export function storageTools(deps) {
       async execute(args, exec) {
         const { controller, name } = instanceOf(deps, args);
         const vmid = controller.assertAllowed(args.vmid);
-        const node = await controller.nodeName();
+        const node = await controller.nodeFor(vmid);
         const action = args.action;
         if (action === 'list') {
           const config = await controller.pveshGet(`/nodes/${node}/qemu/${vmid}/config`, {}, { signal: exec?.signal });

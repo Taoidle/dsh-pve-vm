@@ -145,6 +145,13 @@ you can also set in a patch file:
         sshHost: 10.0.0.11      # an address, or an alias from ~/.ssh/config
         sshUser: root
         sshKeyPath: ~/.ssh/lab_ed25519
+        # Optional API transport (see "The API transport" below):
+        apiUrl: https://10.0.0.11:8006
+        apiToken: root@pam!dsh=…    # user@realm!tokenid=secret
+        mode: api                 # auto (API when a token is set) | api | ssh
+        node: pve1                # node-level calls; empty — ask the API
+        apiTlsFingerprint: ''     # sha256 of the node certificate; self-signed nodes need it
+        apiInsecureTls: false     # only when the fingerprint is not an option
         allowVmids: [100, 101]
         description: the lab cluster, node pve1
       - name: office
@@ -171,10 +178,39 @@ you can also set in a patch file:
   node (or per host) you want to reach. Host-level clustering and migration are not followed
   automatically — a moved VM must be reachable through the entry you name.
 
+### The API transport
+
+A token switches the management plane from `ssh qm …` to the Proxmox API. Nothing about the console
+changes — pixels and keystrokes still travel over ssh — but everything that is *configuration* becomes
+cluster-wide and does not need a shell on the node:
+
+* the node a VM lives on is read from `/cluster/resources`, so a tool call works from any entry of the
+  cluster instead of only from the node that owns the VM;
+* the credential is an API token you can revoke or re-scope, not a root ssh key;
+* node administration (`apt`, services, storage, tasks, backups) uses the same REST endpoints as the
+  web UI, and long operations are awaited by polling their task instead of a blocking ssh call.
+
+Create the token once, on a node you can reach (Proxmox shows the secret only at creation time):
+
+```bash
+pveum user token add root@pam dsh --privsep 1 --comment "DeepSeek Harness"
+pveum acl modify / --tokens 'root@pam!dsh' --roles PVEAdmin
+```
+
+Then put `apiUrl` and `apiToken` (`user@realm!tokenid=secret`) on the host card. `mode` decides the
+transport: `auto` (the default) uses the API when a token is set and ssh otherwise, so a host without a
+token keeps working exactly as before. The certificate of a default PVE install is self-signed: either
+pin it with `apiTlsFingerprint` (the sha256 the browser shows) or, in a lab, set `apiInsecureTls: true`.
+
+The API transport is optional on purpose. If the token is missing, expired or its role lacks a
+permission, the error names the endpoint and the HTTP status (`PVE_API_DENIED`), and the ssh path to the
+same node is untouched.
+
 ## Tools
 
 Every tool also takes `instance` — the name of a configured PVE host. It is optional; omit it for
 the default one.
+
 
 ### Console (VNC)
 
