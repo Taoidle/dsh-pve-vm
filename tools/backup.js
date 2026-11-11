@@ -39,7 +39,8 @@ export function backupTools(deps) {
       name: 'vm_backup',
       description:
         'Backups of a VM: list the recent vzdump tasks, start a backup to a storage, or restore an archive over a VM. ' +
-        'Restoring overwrites the target VM and needs a second confirmation; starting a backup and listing are safe.',
+        'Listing is safe; starting with mode=stop or mode=suspend interrupts the guest and needs a second confirmation, ' +
+        'and restoring overwrites the target VM — that also needs one.',
       parameters: {
         action: { type: 'string', enum: ['list', 'start', 'restore'], required: true, description: 'Backup operation.' },
         vmid: { type: 'number', description: 'VM id (required for start and restore).' },
@@ -53,7 +54,10 @@ export function backupTools(deps) {
           type: 'string',
           description: 'Absolute archive path on the node for action=restore, for example /var/lib/vz/dump/vzdump-qemu-100-….vma.zst',
         },
-        confirm: { type: 'string', description: 'The token from the first call, for action=restore.' },
+        confirm: {
+          type: 'string',
+          description: 'The token from the first call, for action=restore and for action=start with mode=stop or mode=suspend.',
+        },
       },
       output: {
         schema: PLAIN_SCHEMA,
@@ -88,20 +92,35 @@ export function backupTools(deps) {
         const vmid = controller.assertAllowed(args.vmid);
         if (action === 'start') {
           const node = await controller.nodeFor(vmid);
-          const result = await controller.pvesh('create', `/nodes/${node}/vzdump`, {
-            params: {
-              vmid,
-              storage: args.storage ?? 'local',
-              mode: args.mode ?? 'snapshot',
-              compress: 'zstd',
+          const mode = args.mode ?? 'snapshot';
+          const risk = mode === 'stop' || mode === 'suspend' ? 'danger' : 'safe';
+          const effect =
+            mode === 'stop'
+              ? 'the guest is stopped for the whole backup, interrupting it until the backup finishes'
+              : mode === 'suspend'
+                ? 'the guest is suspended for the whole backup, interrupting it until the backup finishes'
+                : 'the guest keeps running (QEMU snapshot)';
+          const summary = `Back up VM ${vmid} on ${name} with vzdump mode "${mode}": ${effect}.`;
+          return runGuarded(
+            deps.confirms,
+            { args, instance: name, action: 'vm_backup:start', target: `${name}:vm:${vmid}`, risk, summary },
+            async () => {
+              const result = await controller.pvesh('create', `/nodes/${node}/vzdump`, {
+                params: {
+                  vmid,
+                  storage: args.storage ?? 'local',
+                  mode,
+                  compress: 'zstd',
+                },
+                signal: exec?.signal,
+                timeoutMs: 120_000,
+              });
+              if (result.exitCode !== 0) {
+                throw new VmError(`starting the backup failed: ${result.stderr || result.stdout}`, 'NODE_COMMAND_FAILED');
+              }
+              return { instance: name, action, vmid, upid: upidOf(result.stdout) || result.stdout };
             },
-            signal: exec?.signal,
-            timeoutMs: 120_000,
-          });
-          if (result.exitCode !== 0) {
-            throw new VmError(`starting the backup failed: ${result.stderr || result.stdout}`, 'NODE_COMMAND_FAILED');
-          }
-          return { instance: name, action, vmid, upid: upidOf(result.stdout) || result.stdout };
+          );
         }
         if (action === 'restore') {
           const archive = typeof args.archive === 'string' ? args.archive.trim() : '';

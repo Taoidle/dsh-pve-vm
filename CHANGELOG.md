@@ -3,6 +3,29 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- README: "Which actions need a confirmation" lists every gated tool and action.
+
+### Fixed
+
+- `vm_backup` `start` with `mode=stop` or `mode=suspend` now needs a confirmation token: those modes
+  stop or pause the guest for the whole backup. `mode=snapshot` still runs directly.
+- `backup_job` `run` now checks the stored job mode and needs a token when it will stop or suspend the
+  guests.
+- `pve_pool` `update` is a danger action: replacing the member list changes which pool-derived ACLs
+  apply, and the confirmation summary lists the added and removed guests.
+- `lxc_power` `shutdown` is now `danger`, matching `vm_power`, so a graceful stop cannot run unguarded
+  just because the guest is a container.
+- Irreversible actions are labelled `destroy`, not `danger`: `vm_snapshot` delete/rollback,
+  `lxc_snapshot` delete/rollback, `storage_content` delete-volume and `pve_storage` delete.
+- `pve_storage` create/update/delete and `storage_content` download-url/delete-volume now check the
+  `pvesh` exit code and raise `NODE_COMMAND_FAILED` with the stderr instead of reporting success.
+- The offline suite pins the new gates: dangerous backups, pool updates and LXC shutdown perform
+  nothing without a token, and a failing storage write surfaces its error.
+
 ## [0.9.2] — 2026-11-11
 
 ### Fixed

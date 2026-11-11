@@ -19,7 +19,7 @@ import { VmError } from '../lib/session.js';
 /** Host endings the LXC status endpoints accept. */
 const POWER_ACTIONS = {
   start: 'safe',
-  shutdown: 'safe',
+  shutdown: 'danger',
   stop: 'danger',
   reboot: 'danger',
   suspend: 'danger',
@@ -105,8 +105,8 @@ export function lxcTools(deps) {
     {
       name: 'lxc_power',
       description:
-        'Start, shut down, stop, reboot, suspend or resume a container. `stop`, `reboot` and `suspend` need a second ' +
-        'confirmation (the first call returns a token, the second call with confirm="<token>" performs it).',
+        'Start, shut down, stop, reboot, suspend or resume a container. `shutdown`, `stop`, `reboot` and `suspend` need ' +
+        'a second confirmation (the first call returns a token, the second call with confirm="<token>" performs it).',
       parameters: {
         vmid: { type: 'number', required: true, description: 'Container id.' },
         action: {
@@ -115,7 +115,7 @@ export function lxcTools(deps) {
           required: true,
           description: 'Lifecycle action.',
         },
-        confirm: { type: 'string', description: 'The token from the first call, for stop, reboot and suspend.' },
+        confirm: { type: 'string', description: 'The token from the first call, for shutdown, stop, reboot and suspend.' },
       },
       output: {
         schema: PLAIN_SCHEMA,
@@ -142,7 +142,11 @@ export function lxcTools(deps) {
         };
         if (risk === 'safe') return run();
         const summary = `Container ${vmid} on ${name}: ${action}. ${
-          action === 'stop' ? 'This is an immediate stop, not a shutdown.' : 'Any unsaved state in the container is lost.'
+          action === 'stop'
+            ? 'This is an immediate stop, not a shutdown.'
+            : action === 'shutdown'
+              ? 'This is a graceful shutdown, not an immediate stop.'
+              : 'Any unsaved state in the container is lost.'
         }`;
         return runGuarded(
           deps.confirms,
@@ -301,7 +305,7 @@ export function lxcTools(deps) {
           : `Delete snapshot "${snapshot}" of container ${vmid} on ${name}: that state can no longer be restored.`;
         return runGuarded(
           deps.confirms,
-          { args, instance: name, action: `lxc_snapshot:${args.action}`, target: `${name}:lxc:${vmid}:${snapshot}`, risk: rollback ? 'destroy' : 'danger', summary },
+          { args, instance: name, action: `lxc_snapshot:${args.action}`, target: `${name}:lxc:${vmid}:${snapshot}`, risk: 'destroy', summary },
           async () => {
             if (rollback) await controller.pvesh('create', `${base}/${encodeURIComponent(snapshot)}/rollback`, { signal: exec?.signal, timeoutMs: 600_000 });
             else await controller.pvesh('delete', `${base}/${encodeURIComponent(snapshot)}`, { signal: exec?.signal, timeoutMs: 600_000 });

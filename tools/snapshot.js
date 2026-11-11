@@ -81,7 +81,7 @@ export function snapshotTools(deps) {
             instance: name,
             action: `vm_snapshot:${args.action}`,
             target: `${name}:vm:${vmid}:${snapshot}`,
-            risk: rollback ? 'destroy' : 'danger',
+            risk: 'destroy',
             summary,
           },
           async () => {

@@ -9,15 +9,15 @@ import assert from 'node:assert/strict';
 import { ConfirmationStore, confirmationRequired, runGuarded } from '../lib/confirm.js';
 
 const problems = [];
-function check(name, operation) {
+async function check(name, operation) {
   try {
-    operation();
+    await operation();
   } catch (error) {
     problems.push(`${name}: ${error?.message ?? error}`);
   }
 }
 
-check('a safe action runs without a token', async () => {
+await check('a safe action runs without a token', async () => {
   const store = new ConfirmationStore();
   let ran = 0;
   const value = await runGuarded(store, { args: {}, instance: 'lab', action: 'x', target: 'lab:vm:1', risk: 'safe', summary: '' }, async () => {
@@ -28,7 +28,7 @@ check('a safe action runs without a token', async () => {
   assert.equal(ran, 1);
 });
 
-check('a dangerous action performs nothing on the first call', async () => {
+await check('a dangerous action performs nothing on the first call', async () => {
   const store = new ConfirmationStore();
   let ran = 0;
   const value = await runGuarded(
@@ -49,7 +49,24 @@ check('a dangerous action performs nothing on the first call', async () => {
   assert.match(value.instruction, /Nothing was changed/);
 });
 
-check('the token performs the action exactly once', async () => {
+await check('an irreversible destroy action is not treated as safe', async () => {
+  const store = new ConfirmationStore();
+  let ran = 0;
+  const value = await runGuarded(
+    store,
+    { args: {}, instance: 'lab', action: 'vm_snapshot:delete', target: 'lab:vm:100:snap1', risk: 'destroy', summary: 'delete snapshot snap1' },
+    async () => {
+      ran += 1;
+      return 'done';
+    },
+  );
+  assert.equal(ran, 0);
+  assert.equal(value.status, 'confirmation-required');
+  assert.equal(value.performed, false);
+  assert.equal(value.risk, 'destroy');
+});
+
+await check('the token performs the action exactly once', async () => {
   const store = new ConfirmationStore();
   let ran = 0;
   const spec = (args) => ({
@@ -82,7 +99,7 @@ check('the token performs the action exactly once', async () => {
   assert.equal(ran, 1);
 });
 
-check('a token is bound to its action and target', async () => {
+await check('a token is bound to its action and target', async () => {
   const store = new ConfirmationStore();
   const first = await runGuarded(
     store,
@@ -93,14 +110,14 @@ check('a token is bound to its action and target', async () => {
     () =>
       runGuarded(
         store,
-        { args: { confirm: first.confirm }, instance: 'lab', action: 'vm_power:reset', target: 'lab:vm:100', risk: 'danger', summary: 'reset' },
+        { args: { confirm: first.confirm }, instance: 'lab', action: 'vm_power:reset', target: 'lab:vm:100', risk: 'destroy', summary: 'reset' },
         async () => 'done',
       ),
     /issued for vm_power:stop/,
   );
 });
 
-check('an expired token is refused', async () => {
+await check('an expired token is refused', async () => {
   let now = 1_000;
   const store = new ConfirmationStore({ ttlMs: 500, now: () => now });
   const first = await runGuarded(
@@ -120,7 +137,7 @@ check('an expired token is refused', async () => {
   );
 });
 
-check('confirmationRequired carries the token and the deadline', () => {
+await check('confirmationRequired carries the token and the deadline', () => {
   const store = new ConfirmationStore({ ttlMs: 60_000, now: () => 5_000 });
   const record = store.issue({ instance: 'lab', action: 'a', target: 'lab:vm:1', summary: 's' });
   const payload = confirmationRequired(record);
@@ -129,7 +146,7 @@ check('confirmationRequired carries the token and the deadline', () => {
   assert.equal(payload.status, 'confirmation-required');
 });
 
-check('the store keeps only the newest tokens', () => {
+await check('the store keeps only the newest tokens', () => {
   const store = new ConfirmationStore({ limit: 2 });
   const a = store.issue({ instance: 'lab', action: 'a', target: '1', summary: '' });
   store.issue({ instance: 'lab', action: 'b', target: '2', summary: '' });
@@ -137,8 +154,6 @@ check('the store keeps only the newest tokens', () => {
   assert.equal(store.take(a.token), undefined);
 });
 
-const top = [];
-for (const [index, entry] of problems.entries()) top.push(`${index + 1}. ${entry}`);
 if (problems.length > 0) {
   console.error(JSON.stringify({ problems }, null, 2));
   process.exitCode = 1;

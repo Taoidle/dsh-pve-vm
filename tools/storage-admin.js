@@ -36,6 +36,23 @@ function upidOf(stdout) {
 }
 
 /**
+ * Run one pvesh write and fail loudly when it exits non-zero. The API transport
+ * throws by itself; the ssh transport returns {exitCode, stdout, stderr}, and
+ * ignoring that code would report a failed write as if it had happened.
+ */
+async function pveshWrite(controller, method, path, options) {
+  const result = await controller.pvesh(method, path, options);
+  if (result?.exitCode !== 0) {
+    const detail = result?.stderr || result?.stdout || 'no error output';
+    throw new VmError(
+      `pvesh ${method} ${path} exited with ${result?.exitCode ?? 'no exit code'}: ${detail}`,
+      'NODE_COMMAND_FAILED',
+    );
+  }
+  return result;
+}
+
+/**
  * Build the storage tools.
  * @param {{pool: object, settings: () => object, confirms: object}} deps plugin dependencies.
  */
@@ -101,7 +118,7 @@ export function storageAdminTools(deps) {
             deps.confirms,
             { args, instance: name, action: 'pve_storage:create', target: `${name}:storage:${storageId}`, risk: 'danger', summary },
             async () => {
-              await controller.pvesh('create', '/storage', { params, signal: exec?.signal });
+              await pveshWrite(controller, 'create', '/storage', { params, signal: exec?.signal });
               return { instance: name, action, storage: storageId };
             },
           );
@@ -112,9 +129,9 @@ export function storageAdminTools(deps) {
           const summary = `Delete the storage record "${storageId}". The files on the underlying storage stay; PVE just stops using it, and guests that live there become unusable until it is re-added.`;
           return runGuarded(
             deps.confirms,
-            { args, instance: name, action: 'pve_storage:delete', target: `${name}:storage:${storageId}`, risk: 'danger', summary },
+            { args, instance: name, action: 'pve_storage:delete', target: `${name}:storage:${storageId}`, risk: 'destroy', summary },
             async () => {
-              await controller.pvesh('delete', `/storage/${encodeURIComponent(storageId)}`, { signal: exec?.signal });
+              await pveshWrite(controller, 'delete', `/storage/${encodeURIComponent(storageId)}`, { signal: exec?.signal });
               return { instance: name, action, storage: storageId };
             },
           );
@@ -126,7 +143,7 @@ export function storageAdminTools(deps) {
           deps.confirms,
           { args, instance: name, action: 'pve_storage:update', target: `${name}:storage:${storageId}`, risk: 'danger', summary },
           async () => {
-            await controller.pvesh('set', `/storage/${encodeURIComponent(storageId)}`, { params, signal: exec?.signal });
+            await pveshWrite(controller, 'set', `/storage/${encodeURIComponent(storageId)}`, { params, signal: exec?.signal });
             return { instance: name, action, storage: storageId };
           },
         );
@@ -206,7 +223,7 @@ export function storageAdminTools(deps) {
         if (action === 'download-url') {
           const url = String(args.url ?? '').trim();
           if (!/^https?:\/\//.test(url)) throw new VmError('download-url needs an http(s) URL', 'BAD_ARGUMENT');
-          const answer = await controller.pvesh('create', `/nodes/${node}/storage/${encodeURIComponent(storage)}/download-url`, {
+          const answer = await pveshWrite(controller, 'create', `/nodes/${node}/storage/${encodeURIComponent(storage)}/download-url`, {
             params: { url, content: 'iso', ...(args.filename ? { filename: String(args.filename) } : {}) },
             signal: exec?.signal,
             timeoutMs: 120_000,
@@ -219,9 +236,9 @@ export function storageAdminTools(deps) {
           const summary = `Delete ${volume} from storage ${storage} on ${node}. The file is removed, not moved to a trash.`;
           return runGuarded(
             deps.confirms,
-            { args, instance: name, action: 'storage_content:delete-volume', target: `${name}:volume:${volume}`, risk: 'danger', summary },
+            { args, instance: name, action: 'storage_content:delete-volume', target: `${name}:volume:${volume}`, risk: 'destroy', summary },
             async () => {
-              await controller.pvesh('delete', `/nodes/${node}/storage/${encodeURIComponent(storage)}/content/${encodeURIComponent(volume)}`, {
+              await pveshWrite(controller, 'delete', `/nodes/${node}/storage/${encodeURIComponent(storage)}/content/${encodeURIComponent(volume)}`, {
                 signal: exec?.signal,
                 timeoutMs: 600_000,
               });

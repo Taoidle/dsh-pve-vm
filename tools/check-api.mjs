@@ -16,6 +16,7 @@ import { ApiController, withSshFallback } from '../lib/api-controller.js';
 import { PveApi } from '../lib/api.js';
 import { ConfirmationStore } from '../lib/confirm.js';
 import { lxcTools } from './lxc.js';
+import { backupTools } from './backup.js';
 import { backupJobTools } from './backup-jobs.js';
 import { poolTools } from './pools.js';
 import { storageAdminTools } from './storage-admin.js';
@@ -74,7 +75,7 @@ const server = http.createServer((request, response) => {
     if (path === `/api2/json/nodes/pve-2/tasks/${encodeURIComponent(UPID)}/status`) {
       return answer({ status: 'stopped', exitstatus: 'OK' });
     }
-    if (path === '/api2/json/nodes/pve-ci/vzdump') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/vzdump' || path === '/api2/json/nodes/pve-2/vzdump') return answer(UPID);
     if (path === '/api2/json/cluster/backup') {
       if (request.method === 'POST') return answer('backup-abc123');
       return answer([
@@ -85,11 +86,17 @@ const server = http.createServer((request, response) => {
       if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
       return answer({ id: 'backup-abc123', storage: 'local', schedule: '02:30', vmid: '100,101', mode: 'snapshot', compress: 'zstd', enabled: 1 });
     }
+    if (path === '/api2/json/cluster/backup/backup-stop') {
+      return answer({ id: 'backup-stop', storage: 'local', schedule: '03:00', vmid: '104', mode: 'stop', compress: 'zstd', enabled: 1 });
+    }
     if (path === '/api2/json/pools') {
       if (request.method === 'POST') return answer(null);
       return answer([{ poolid: 'ci', comment: 'CI pool' }]);
     }
-    if (path === '/api2/json/pools/ci') return answer({ poolid: 'ci', comment: 'CI pool', members: [{ id: 'qemu/104', type: 'qemu', vmid: 104 }] });
+    if (path === '/api2/json/pools/ci') {
+      if (request.method === 'PUT') return answer(null);
+      return answer({ poolid: 'ci', comment: 'CI pool', members: [{ id: 'qemu/104', type: 'qemu', vmid: 104 }] });
+    }
     if (path === '/api2/json/nodes/pve-ci/lxc') return answer(UPID);
     if (path === '/api2/json/nodes/pve-ci/lxc/300/status/current') return answer({ status: 'running' });
     if (path === '/api2/json/nodes/pve-ci/lxc/300/status/stop') return answer(UPID);
@@ -332,6 +339,19 @@ await checkAsync('lxc_power start runs without a token', async () => {
   assert.ok(seen.some((entry) => entry.path.endsWith('/status/start')));
 });
 
+await checkAsync('lxc_power shutdown is gated like a VM shutdown', async () => {
+  const tool = byName(lxc, 'lxc_power');
+  seen.length = 0;
+  const first = await tool.execute({ vmid: 300, action: 'shutdown' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(first.risk, 'danger');
+  assert.equal(seen.filter((entry) => entry.method === 'POST' && entry.path.endsWith('/status/shutdown')).length, 0);
+  const done = await tool.execute({ vmid: 300, action: 'shutdown', confirm: first.confirm }, {});
+  assert.equal(done.action, 'shutdown');
+  assert.equal(done.state, 'running');
+  assert.ok(seen.some((entry) => entry.method === 'POST' && entry.path.endsWith('/lxc/300/status/shutdown')));
+});
+
 await checkAsync('lxc_create posts the template and the storage to /nodes/{node}/lxc', async () => {
   const tool = byName(lxc, 'lxc_create');
   seen.length = 0;
@@ -365,6 +385,44 @@ await checkAsync('backup_job create needs a token and answers the job id', async
   assert.equal(done.id, 'backup-abc123');
 });
 
+await checkAsync('vm_backup start with mode=stop needs a token and performs nothing before it', async () => {
+  const tool = byName(backupTools(toolDeps), 'vm_backup');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'start', vmid: 104, mode: 'stop' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(first.performed, false);
+  assert.equal(first.risk, 'danger');
+  assert.match(first.summary, /mode "stop"/);
+  assert.match(first.summary, /stopped/);
+  assert.equal(seen.filter((entry) => entry.method === 'POST').length, 0);
+  const done = await tool.execute({ action: 'start', vmid: 104, mode: 'stop', confirm: first.confirm }, {});
+  assert.equal(done.action, 'start');
+  assert.match(done.upid, /^UPID:/);
+  assert.ok(seen.some((entry) => entry.method === 'POST' && entry.path === '/api2/json/nodes/pve-2/vzdump'));
+});
+
+await checkAsync('vm_backup start with mode=snapshot runs without a token', async () => {
+  const tool = byName(backupTools(toolDeps), 'vm_backup');
+  seen.length = 0;
+  const out = await tool.execute({ action: 'start', vmid: 104 }, {});
+  assert.equal(out.action, 'start');
+  assert.match(out.upid, /^UPID:/);
+  assert.ok(seen.some((entry) => entry.method === 'POST' && entry.path === '/api2/json/nodes/pve-2/vzdump'));
+});
+
+await checkAsync('backup_job run with a stored stop mode needs a token', async () => {
+  const tool = byName(backupJobTools(toolDeps), 'backup_job');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'run', id: 'backup-stop' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(first.risk, 'danger');
+  assert.match(first.summary, /mode "stop"/);
+  assert.equal(seen.filter((entry) => entry.method === 'POST').length, 0);
+  const done = await tool.execute({ action: 'run', id: 'backup-stop', confirm: first.confirm }, {});
+  assert.match(done.upid, /^UPID:/);
+  assert.ok(seen.some((entry) => entry.method === 'POST' && entry.path === '/api2/json/nodes/pve-ci/vzdump'));
+});
+
 await checkAsync('pve_pool creates a pool and lists one pool in detail', async () => {
   const tool = byName(poolTools(toolDeps), 'pve_pool');
   seen.length = 0;
@@ -374,6 +432,22 @@ await checkAsync('pve_pool creates a pool and lists one pool in detail', async (
   assert.ok(post, 'the pool was not created');
   const detail = await tool.execute({ action: 'list', pool: 'ci' }, {});
   assert.equal(detail.pools[0].members[0].vmid, 104);
+});
+
+await checkAsync('pve_pool update needs a token and names the membership change', async () => {
+  const tool = byName(poolTools(toolDeps), 'pve_pool');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'update', pool: 'ci', vms: '105' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(first.performed, false);
+  assert.equal(first.risk, 'danger');
+  assert.match(first.summary, /added \[105\]/);
+  assert.match(first.summary, /removed \[104\]/);
+  assert.match(first.summary, /ACL/i);
+  assert.equal(seen.filter((entry) => entry.method === 'PUT').length, 0);
+  const done = await tool.execute({ action: 'update', pool: 'ci', vms: '105', confirm: first.confirm }, {});
+  assert.equal(done.action, 'update');
+  assert.ok(seen.some((entry) => entry.method === 'PUT' && entry.path === '/api2/json/pools/ci'));
 });
 
 
@@ -459,6 +533,36 @@ await checkAsync('storage_content download-url posts the URL to the node', async
   assert.equal(out.upid, UPID);
   const post = seen.find((entry) => entry.path.endsWith('/download-url'));
   assert.deepEqual(JSON.parse(post.body), { url: 'https://example.invalid/debian.iso', content: 'iso' });
+});
+
+const failingWriteDeps = {
+  pool: {
+    target: () => ({
+      name: 'x99i',
+      controller: {
+        nodeName: async () => 'pve-ci',
+        pvesh: async () => ({ exitCode: 1, stdout: '', stderr: 'storage "local" is read-only' }),
+      },
+      settings,
+    }),
+  },
+  settings: () => settings,
+  confirms: new ConfirmationStore(),
+};
+
+await checkAsync('a storage write that exits non-zero surfaces the stderr instead of success', async () => {
+  const failingStorage = storageAdminTools(failingWriteDeps);
+  await assert.rejects(
+    () => byName(failingStorage, 'storage_content').execute({ action: 'download-url', storage: 'local', url: 'https://example.invalid/x.iso' }, {}),
+    (error) => error.code === 'NODE_COMMAND_FAILED' && /exited with 1/.test(error.message) && /read-only/.test(error.message),
+  );
+  const tool = byName(failingStorage, 'pve_storage');
+  const first = await tool.execute({ action: 'delete', storage: 'lab' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await assert.rejects(
+    () => tool.execute({ action: 'delete', storage: 'lab', confirm: first.confirm }, {}),
+    (error) => error.code === 'NODE_COMMAND_FAILED' && /exited with 1/.test(error.message) && /read-only/.test(error.message),
+  );
 });
 
 await checkAsync('storage_content import-disk asks for confirmation before touching a VM', async () => {
