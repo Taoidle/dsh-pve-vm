@@ -290,6 +290,25 @@ it can be managed afterwards.
 A new container starts out **outside** the allow list on purpose: creating a guest does not touch an
 existing one, but managing it later is an explicit decision, so add its id to `allowVmids` first.
 
+### Storage: definitions and the files inside them
+
+Two sides of the same subject. `pve_storage` owns the cluster records (`/storage`) — which
+datastores exist, of what type, with which content kinds and on which nodes. `storage_content` owns
+the files inside one of them: ISOs, backups and disk images. A wrong definition hides a datastore (or
+points it at the wrong path), so the writes are confirmed; deleting a volume really deletes the file.
+
+| Tool | Parameters | What it does |
+|---|---|---|
+| `pve_storage` | `action` = `list` \| `create` \| `update` \| `delete`, `storage?`, `type?`, `content?`, `path?`, `server?`, `export?`, `nodes?`, `disable?`, `confirm?` | Storage definitions; `create` needs a `storage` id and a `type`, `update` takes any of the fields, `delete` removes only the record (the files stay on the underlying storage). All writes need a token. |
+| `storage_content` | `action` = `list` \| `upload-iso` \| `delete-volume` \| `download-url` \| `import-disk`, `storage`, `node?`, `content?`, `volume?`, `file?`, `filename?`, `url?`, `source?`, `vmid?`, `format?`, `confirm?` | `list` shows the volumes of one content kind (ISOs by default), `upload-iso` streams a local file to the storage, `download-url` fetches a URL on the node, `delete-volume` removes one volume and `import-disk` adds a local image to a VM as a new disk. |
+
+`upload-iso` needs the API transport (an `apiToken` on the card) because the file is streamed as
+`multipart/form-data`; everything else also works through `pvesh` over ssh. An upload of a few
+gigabytes is fine — the body is piped from disk, not buffered — and the answer carries the task id,
+which is awaited before the call returns. `delete-volume` and `import-disk` need a confirmation
+token; `import-disk` adds the disk unattached, so assign it to `scsiN`/`virtioN` afterwards with
+`vm_config`.
+
 ### Dangerous operations need a second confirmation
 
 A dangerous call does **nothing** on its first invocation. It returns

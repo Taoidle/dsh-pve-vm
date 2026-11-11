@@ -3,6 +3,24 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.7.0] — 2026-11-11
+
+### Added
+
+- Storage definitions: `pve_storage` lists, creates, updates and deletes `/storage` records, with the
+  storage type and the content kinds kept as an enum so a typo cannot hide a datastore.
+- Storage contents: `storage_content` lists one content kind, uploads an ISO from this machine
+  (streamed `multipart/form-data`, no buffering), downloads a file from a URL on the node, deletes a
+  volume and imports a disk into a VM. Delete and import are confirmed.
+- `PveApi.upload()` and `ApiController.waitTask()`: the upload body is piped from disk with an exact
+  content-length, and the task id it answers with is awaited like every other long operation.
+- `PVE_API_CONFIGURATION` for a token that is not written as `user@realm!tokenid=secret`; it surfaces
+  as `BAD_ARGUMENT` instead of a generic node-command failure.
+
+### Changed
+
+- The API client's response handling is one private `#settle` step, shared by requests and uploads.
+
 ## [0.6.0] — 2026-11-11
 
 ### Added

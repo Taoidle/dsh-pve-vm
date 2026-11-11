@@ -8,6 +8,9 @@
  * the tools break in a way that only shows up against a real node.
  */
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import { ApiController, withSshFallback } from '../lib/api-controller.js';
 import { PveApi } from '../lib/api.js';
@@ -15,6 +18,7 @@ import { ConfirmationStore } from '../lib/confirm.js';
 import { lxcTools } from './lxc.js';
 import { backupJobTools } from './backup-jobs.js';
 import { poolTools } from './pools.js';
+import { storageAdminTools } from './storage-admin.js';
 
 const problems = [];
 const check = (name, fn) => {
@@ -47,7 +51,7 @@ const server = http.createServer((request, response) => {
     body += chunk;
   });
   request.on('end', () => {
-    seen.push({ method: request.method, path: url.pathname, query: url.search, body, auth: request.headers.authorization });
+    seen.push({ method: request.method, path: url.pathname, query: url.search, body, headers: request.headers, auth: request.headers.authorization });
     const answer = (data, status = 200) => {
       response.writeHead(status, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ data }));
@@ -92,6 +96,30 @@ const server = http.createServer((request, response) => {
     if (path === '/api2/json/nodes/pve-ci/lxc/300/status/shutdown') return answer(UPID);
     if (path === '/api2/json/nodes/pve-ci/lxc/300/config') return answer({ hostname: 'ct300', memory: 512 });
     if (path === '/api2/json/nodes/pve-ci/lxc/300/snapshot') return answer([{ name: 'snap1' }]);
+    if (path === '/api2/json/storage') {
+      if (request.method === 'POST') return answer(null);
+      return answer([
+        { storage: 'local', type: 'dir', content: 'iso,vztmpl,backup', path: '/var/lib/vz' },
+        { storage: 'local-lvm', type: 'lvmthin', content: 'images,rootdir' },
+      ]);
+    }
+    if (path === '/api2/json/storage/local') {
+      if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
+      return answer({ storage: 'local', type: 'dir', content: 'iso,vztmpl,backup' });
+    }
+    if (path === '/api2/json/storage/lab') {
+      if (request.method === 'DELETE') return answer(null);
+      return answer({ storage: 'lab', type: 'dir' });
+    }
+    if (path === '/api2/json/nodes/pve-ci/storage/local/content' && request.method === 'GET') {
+      return answer([{ volid: 'local:iso/debian-12.iso', size: 536870912, ctime: 1700000000, content: 'iso' }]);
+    }
+    if (path === '/api2/json/nodes/pve-ci/storage/local/upload') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/storage/local/download-url') return answer(UPID);
+    if (path.startsWith('/api2/json/nodes/pve-ci/storage/local/content/') && request.method === 'DELETE') return answer(null);
+    if (path === `/api2/json/nodes/pve-ci/tasks/${encodeURIComponent(UPID)}/status`) {
+      return answer({ status: 'stopped', exitstatus: 'OK' });
+    }
     return answer({ message: `unexpected ${request.method} ${path}` }, 500);
   });
 });
@@ -178,6 +206,23 @@ await checkAsync('pvesh create returns the UPID as stdout so the tools keep pars
   const call = seen.find((item) => item.method === 'POST');
   assert.equal(call.path, '/api2/json/nodes/pve-ci/vzdump');
   assert.deepEqual(JSON.parse(call.body), { vmid: 104, storage: 'local' });
+});
+
+
+await checkAsync('a bare token secret fails as BAD_ARGUMENT before any request', async () => {
+  const broken = withSshFallback(
+    new ApiController({
+      settings: () => ({ ...settings, api: { url: apiUrl, token: 'just-the-secret', fingerprint: '', insecureTls: false } }),
+      spawn: () => {
+        throw new Error('ssh must not be used by the API transport');
+      },
+      cwd: process.cwd(),
+    }),
+  );
+  await assert.rejects(async () => {
+    await broken.pveshGet('/storage');
+  }, (error) => error.code === 'BAD_ARGUMENT' && /user@realm!tokenid=secret/.test(error.message));
+  broken.closeAll();
 });
 
 await checkAsync('the allow list still guards the VM id before any call', async () => {
@@ -283,6 +328,98 @@ await checkAsync('pve_pool creates a pool and lists one pool in detail', async (
   assert.ok(post, 'the pool was not created');
   const detail = await tool.execute({ action: 'list', pool: 'ci' }, {});
   assert.equal(detail.pools[0].members[0].vmid, 104);
+});
+
+
+const storage = storageAdminTools(toolDeps);
+const storageTool = byName(storage, 'pve_storage');
+const contentTool = byName(storage, 'storage_content');
+
+await checkAsync('pve_storage lists the storage records and can filter one', async () => {
+  const all = await storageTool.execute({ action: 'list' }, {});
+  assert.deepEqual(all.storages.map((entry) => entry.storage), ['local', 'local-lvm']);
+  const one = await storageTool.execute({ action: 'list', storage: 'local' }, {});
+  assert.equal(one.storages.length, 1);
+  assert.equal(one.storages[0].type, 'dir');
+});
+
+await checkAsync('pve_storage create is gated and posts the definition', async () => {
+  seen.length = 0;
+  const first = await storageTool.execute({ action: 'create', storage: 'lab', type: 'dir', path: '/mnt/lab' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'POST').length, 0);
+  const done = await storageTool.execute({ action: 'create', storage: 'lab', type: 'dir', path: '/mnt/lab', confirm: first.confirm }, {});
+  assert.equal(done.storage, 'lab');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/storage'));
+  assert.ok(post, 'the storage record was not posted');
+  const body = JSON.parse(post.body);
+  assert.equal(body.storage, 'lab');
+  assert.equal(body.type, 'dir');
+  assert.equal(body.path, '/mnt/lab');
+  assert.equal(body.content, 'images,iso,backup');
+});
+
+await checkAsync('pve_storage delete is gated and sends DELETE', async () => {
+  seen.length = 0;
+  const first = await storageTool.execute({ action: 'delete', storage: 'lab' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'DELETE').length, 0);
+  await storageTool.execute({ action: 'delete', storage: 'lab', confirm: first.confirm }, {});
+  assert.ok(seen.some((entry) => entry.method === 'DELETE' && entry.path === '/api2/json/storage/lab'));
+});
+
+await checkAsync('storage_content list asks for the content kind on the right node', async () => {
+  seen.length = 0;
+  const out = await contentTool.execute({ action: 'list', storage: 'local' }, {});
+  assert.equal(out.node, 'pve-ci');
+  assert.equal(out.volumes[0].volid, 'local:iso/debian-12.iso');
+  const call = seen.find((entry) => entry.path.endsWith('/storage/local/content'));
+  assert.ok(call, 'the content endpoint was not read');
+  assert.match(call.query, /content=iso/);
+});
+
+await checkAsync('storage_content upload-iso streams multipart and awaits the UPID', async () => {
+  const file = path.join(os.tmpdir(), 'pve-check-probe.iso');
+  fs.writeFileSync(file, Buffer.from('probe-iso-bytes'));
+  try {
+    seen.length = 0;
+    const out = await contentTool.execute({ action: 'upload-iso', storage: 'local', file, filename: 'probe.iso' }, {});
+    assert.equal(out.filename, 'probe.iso');
+    const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/storage/local/upload'));
+    assert.ok(post, 'the upload was not posted');
+    assert.match(post.headers?.['content-type'] ?? '', /multipart\/form-data; boundary=----dshpve/);
+    assert.match(post.body, /name="filename"; filename="probe\.iso"/);
+    assert.match(post.body, /probe-iso-bytes/);
+    assert.ok(seen.some((entry) => entry.path.includes('/tasks/')), 'the upload task was not awaited');
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
+});
+
+await checkAsync('storage_content delete-volume is gated and deletes the full volume id', async () => {
+  seen.length = 0;
+  const first = await contentTool.execute({ action: 'delete-volume', storage: 'local', volume: 'local:iso/debian-12.iso' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'DELETE').length, 0);
+  await contentTool.execute({ action: 'delete-volume', storage: 'local', volume: 'local:iso/debian-12.iso', confirm: first.confirm }, {});
+  assert.ok(
+    seen.some((entry) => entry.method === 'DELETE' && entry.path === `/api2/json/nodes/pve-ci/storage/local/content/${encodeURIComponent('local:iso/debian-12.iso')}`),
+  );
+});
+
+await checkAsync('storage_content download-url posts the URL to the node', async () => {
+  seen.length = 0;
+  const out = await contentTool.execute({ action: 'download-url', storage: 'local', url: 'https://example.invalid/debian.iso' }, {});
+  assert.equal(out.upid, UPID);
+  const post = seen.find((entry) => entry.path.endsWith('/download-url'));
+  assert.deepEqual(JSON.parse(post.body), { url: 'https://example.invalid/debian.iso', content: 'iso' });
+});
+
+await checkAsync('storage_content import-disk asks for confirmation before touching a VM', async () => {
+  seen.length = 0;
+  const first = await contentTool.execute({ action: 'import-disk', storage: 'local-lvm', vmid: 104, source: '/tmp/disk.qcow2' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.match(first.summary, /import/i);
 });
 
 controller.closeAll();

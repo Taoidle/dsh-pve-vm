@@ -20,6 +20,7 @@ import { guestTools } from './tools/guest.js';
 import { lifecycleTools } from './tools/lifecycle.js';
 import { snapshotTools } from './tools/snapshot.js';
 import { storageTools } from './tools/storage.js';
+import { storageAdminTools } from './tools/storage-admin.js';
 import { nodeTools } from './tools/node.js';
 import { clusterTools } from './tools/cluster.js';
 import { backupTools } from './tools/backup.js';
@@ -58,6 +59,7 @@ export function apply(ctx, config) {
     ...lifecycleTools(deps),
     ...snapshotTools(deps),
     ...storageTools(deps),
+    ...storageAdminTools(deps),
     ...nodeTools(deps),
     ...clusterTools(deps),
     ...backupTools(deps),
