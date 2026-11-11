@@ -261,7 +261,7 @@ plugin still needs no PVE API token.
 | `node_task` | `upid`, `action` = `status` \| `log` \| `stop`, `confirm?` | Follow or stop a task by UPID (apt upgrade, backup, migration). |
 | `cluster_status` | `action` = `status` \| `resources` \| `nodes` \| `nextid` \| `ha` | Cluster view; this is also how the plugin finds which node owns a VM. |
 | `pve_api` | `method` = `get` \| `create` \| `set` \| `delete`, `path`, `params?: ["k=v"]`, `confirm?` | Escape hatch for anything the typed tools do not cover. Reads run directly; writes go through the confirmation flow. |
-| `vm_backup` | `action` = `list` \| `start` \| `restore`, `vmid?`, `storage?`, `mode?`, `archive?`, `confirm?` | `vzdump` tasks and `qmrestore`. |
+| `vm_backup` | `action` = `list` \| `start` \| `restore`, `vmid?`, `storage?`, `mode?`, `archive?`, `confirm?` | `vzdump` tasks and `qmrestore`. `start` with `mode=stop` or `mode=suspend` interrupts the guest and needs a token; so does `restore`. |
 | `vm_clone` | `vmid`, `newid?`, `name?`, `full?`, `target?` | Clone a VM (full or linked). |
 | `vm_migrate` | `vmid`, `target`, `online?`, `withLocalDisks?`, `confirm?` | Move a VM to another cluster node. |
 
@@ -277,14 +277,14 @@ it can be managed afterwards.
 |---|---|---|
 | `lxc_list` | `node?` | Every container in the cluster (or one node) with status, memory and the node it lives on. |
 | `lxc_status` | `vmid` | Runtime status and the full container configuration. |
-| `lxc_power` | `vmid`, `action` = `start` \| `shutdown` \| `stop` \| `reboot` \| `suspend` \| `resume`, `confirm?` | Lifecycle; `stop`, `reboot` and `suspend` need a token. Answer carries the status afterwards. |
+| `lxc_power` | `vmid`, `action` = `start` \| `shutdown` \| `stop` \| `reboot` \| `suspend` \| `resume`, `confirm?` | Lifecycle; `shutdown`, `stop`, `reboot` and `suspend` need a token. Answer carries the status afterwards. |
 | `lxc_create` | `ostemplate`, `vmid?`, `hostname?`, `storage?`, `memory?`, `cores?`, `password?`, `start?`, `unprivileged?`, `node?` | Create a container from a template; the id defaults to `/cluster/nextid`. |
 | `lxc_config` | `vmid`, `action` = `get` \| `set`, `settings?: ["key=value"]`, `confirm?` | Read or change the configuration (`key` without `=` deletes it); writes need a token. |
 | `lxc_snapshot` | `vmid`, `action` = `list` \| `create` \| `delete` \| `rollback`, `name?`, `description?`, `confirm?` | Container snapshots; delete and rollback need a token. |
 | `lxc_exec` | `vmid`, `argv` | Run a command with `pct exec` over ssh (the REST API has no exec endpoint). `argv` is the program and its arguments, for example `["uname", "-a"]`. |
 | `lxc_delete` | `vmid`, `purge?`, `force?`, `confirm?` | Destroy the container and its disks; needs a token. |
-| `backup_job` | `action` = `list` \| `create` \| `update` \| `delete` \| `run`, `id?`, `storage?`, `schedule?`, `vmid?`, `mode?`, `compress?`, `enabled?`, `node?`, `confirm?` | Scheduled backup jobs (`/cluster/backup`). `run` reads the job first and then starts `vzdump` on the node that holds the guests; create/update/delete need a token. |
-| `pve_pool` | `action` = `list` \| `create` \| `update` \| `delete`, `pool?`, `comment?`, `vms?`, `storage?`, `confirm?` | Resource pools and their members; `delete` needs a token. |
+| `backup_job` | `action` = `list` \| `create` \| `update` \| `delete` \| `run`, `id?`, `storage?`, `schedule?`, `vmid?`, `mode?`, `compress?`, `enabled?`, `node?`, `confirm?` | Scheduled backup jobs (`/cluster/backup`). `run` reads the job first and then starts `vzdump` on the node that holds the guests; create/update/delete need a token, and `run` needs one when the stored mode is `stop` or `suspend`. |
+| `pve_pool` | `action` = `list` \| `create` \| `update` \| `delete`, `pool?`, `comment?`, `vms?`, `storage?`, `confirm?` | Resource pools and their members; `update` (which replaces the member list) and `delete` need a token. |
 | `vm_template` | `action` = `list` \| `convert`, `vmid?`, `confirm?` | List templates or turn a VM into one (a template cannot be started; clear the flag in the configuration to undo). |
 
 A new container starts out **outside** the allow list on purpose: creating a guest does not touch an
@@ -398,12 +398,41 @@ A dangerous call does **nothing** on its first invocation. It returns
 and the operation only runs when the same tool is called again with
 `confirm: "<token>"` within three minutes. The token is bound to the action and the target, works
 exactly once, and is refused with `CONFIRM_MISMATCH` when it was issued for another VM or another
-action. Risks are `danger` (stop, shutdown, reboot, suspend, resize, move, restart a service, an
-upgrade) and `destroy` (reset, destroy, rollback, restore, migrate, deleting a snapshot, …).
+action. Risks are `danger` (stop, shutdown, reboot, suspend, resize, a configuration or storage write)
+and `destroy` (reset, destroy, rollback, restore, moving a disk, deleting a snapshot, deleting a
+storage record, …).
 
 The panel's power buttons use the same mechanism: 强制断电 / 重置 answer with a confirmation bar
 (确认执行 / 取消) instead of acting immediately, so the agent and the panel can never disagree about
 what needs a second look.
+
+### Which actions need a confirmation
+
+The first call to every action in this table performs nothing and returns a token; the second call with
+`confirm: "<token>"` runs it exactly once. Everything not listed (plus every `list`/`get`/`status`
+action) runs directly.
+
+| Tool | Gated actions |
+|---|---|
+| `vm_power` | `shutdown`, `stop`, `reboot`, `suspend` (danger), `reset` (destroy) |
+| `vm_destroy` | any (destroy) |
+| `vm_snapshot` | `delete`, `rollback` (destroy) |
+| `vm_config` | `set` (danger) |
+| `vm_disk` | `resize`, `attach-iso`, `detach-iso` (danger), `move` (destroy) |
+| `vm_backup` | `start` with `mode=stop` or `mode=suspend` (danger), `restore` (destroy) |
+| `vm_migrate`, `vm_template` | `migrate`, `convert` (danger) |
+| `lxc_power` | `shutdown`, `stop`, `reboot`, `suspend` (danger) |
+| `lxc_config` | `set` (danger) |
+| `lxc_snapshot` | `delete`, `rollback` (destroy) |
+| `lxc_delete` | any (destroy) |
+| `backup_job` | `create`, `update`, `delete` (danger); `run` when the stored mode is `stop` or `suspend` (danger) |
+| `pve_pool` | `update`, `delete` (danger) |
+| `pve_storage` | `create`, `update` (danger), `delete` (destroy) |
+| `storage_content` | `delete-volume` (destroy), `import-disk` (danger) |
+| `node_network` | `delete` (danger), `apply` (destroy) |
+| `node_apt`, `node_service`, `node_task`, `pve_api` | every write (danger) |
+| `pve_user`, `pve_group`, `pve_role`, `pve_acl`, `pve_token` | every write (danger; deletes are destroy) |
+| `pve_firewall` | every write (danger; deleting a rule is destroy) |
 
 ## Watch the VM screen live
 

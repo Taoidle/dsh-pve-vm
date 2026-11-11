@@ -20,15 +20,16 @@ export function poolTools(deps) {
     {
       name: 'pve_pool',
       description:
-        'Resource pools: list (with members), create, update membership or delete. Deleting a pool does not delete its ' +
-        'guests, but it does drop every permission granted through the pool, so it needs a second confirmation.',
+        'Resource pools: list (with members), create, update membership or delete. Updating the vms list replaces the ' +
+        'pool membership and can make pool-derived ACLs stop applying; deleting a pool does not delete its guests, but ' +
+        'it drops every permission granted through the pool. Both update and delete need a second confirmation.',
       parameters: {
         action: { type: 'string', enum: ['list', 'create', 'update', 'delete'], required: true, description: 'Pool operation.' },
         pool: { type: 'string', description: 'Pool id (for update and delete, and to list one pool in detail).' },
         comment: { type: 'string', description: 'Free-text comment (create/update).' },
         vms: { type: 'string', description: 'Guest ids to put in the pool, comma separated (update; replaces the members).' },
         storage: { type: 'string', description: 'Storage ids to put in the pool, comma separated (update).' },
-        confirm: { type: 'string', description: 'The token from the first call, for delete.' },
+        confirm: { type: 'string', description: 'The token from the first call, for update and delete.' },
       },
       output: {
         schema: PLAIN_SCHEMA,
@@ -82,8 +83,33 @@ export function poolTools(deps) {
         if (args.storage !== undefined) params.storage = String(args.storage);
         if (args.comment !== undefined) params.comment = String(args.comment);
         if (Object.keys(params).length === 0) throw new VmError('action=update needs vms, storage or comment', 'BAD_ARGUMENT');
-        await controller.pvesh('set', `/pools/${encodeURIComponent(poolId)}`, { params, signal: exec?.signal });
-        return { instance: name, action, pool: poolId };
+        const current = await controller.pveshGet(`/pools/${encodeURIComponent(poolId)}`, {}, { signal: exec?.signal });
+        const memberIds = (Array.isArray(current?.members) ? current.members : [])
+          .map((member) => (member.vmid !== undefined ? String(member.vmid) : String(member.id ?? '').split('/').pop()))
+          .filter((id) => /^\d+$/.test(id));
+        const desired =
+          args.vms === undefined
+            ? null
+            : String(args.vms)
+                .split(',')
+                .map((id) => id.trim())
+                .filter((id) => id.length > 0);
+        const added = desired ? desired.filter((id) => !memberIds.includes(id)) : [];
+        const removed = desired ? memberIds.filter((id) => !desired.includes(id)) : [];
+        const membership = desired
+          ? `Guest membership changes: added [${added.join(', ') || 'none'}], removed [${removed.join(', ') || 'none'}].`
+          : 'Guest membership is unchanged (vms not given).';
+        const summary =
+          `Update pool ${poolId}: ${membership} ACLs granted at the pool path may stop applying to guests that ` +
+          'leave the pool. The guests themselves are not deleted.';
+        return runGuarded(
+          deps.confirms,
+          { args, instance: name, action: 'pve_pool:update', target: `${name}:pool:${poolId}`, risk: 'danger', summary },
+          async () => {
+            await controller.pvesh('set', `/pools/${encodeURIComponent(poolId)}`, { params, signal: exec?.signal });
+            return { instance: name, action, pool: poolId };
+          },
+        );
       },
     },
     {

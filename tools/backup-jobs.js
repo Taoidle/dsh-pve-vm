@@ -43,7 +43,9 @@ export function backupJobTools(deps) {
       name: 'backup_job',
       description:
         'Scheduled backup jobs: list, create, update, delete, or run one now. Create/update/delete change what will be ' +
-        'backed up later, so they need a second confirmation; listing and running a job are safe.',
+        'backed up later, so they need a second confirmation; listing is safe, and so is running a job whose stored ' +
+        'mode is snapshot. A job stored with mode=stop or mode=suspend interrupts the guest, so running it needs a ' +
+        'confirmation too.',
       parameters: {
         action: { type: 'string', enum: ['list', 'create', 'update', 'delete', 'run'], required: true, description: 'Job operation.' },
         id: { type: 'string', description: 'Job id (for update, delete and run).' },
@@ -54,7 +56,7 @@ export function backupJobTools(deps) {
         compress: { type: 'string', enum: ['0', 'zstd', 'gzip', 'lzo'], description: 'Compression for create/update.' },
         enabled: { type: 'boolean', description: 'Whether the job is armed (create/update).' },
         node: { type: 'string', description: 'Node to run on for action=run (default: the job node, else this instance\'s node).' },
-        confirm: { type: 'string', description: 'The token from the first call, for create, update and delete.' },
+        confirm: { type: 'string', description: 'The token from the first call, for create, update, delete and a run whose stored mode is stop or suspend.' },
       },
       output: {
         schema: PLAIN_SCHEMA,
@@ -87,13 +89,28 @@ export function backupJobTools(deps) {
           }
           if (job.all) params.all = 1;
           else if (job.vmid) params.vmid = String(job.vmid);
-          const result = await controller.pvesh('create', `/nodes/${node}/vzdump`, {
-            params,
-            signal: exec?.signal,
-            timeoutMs: 120_000,
-          });
-          const upid = /UPID:[^\s"']+/.exec(result.stdout ?? '');
-          return { instance: name, action, id, node, upid: upid ? upid[0] : result.stdout };
+          const mode = params.mode ?? 'snapshot';
+          const risk = mode === 'stop' || mode === 'suspend' ? 'danger' : 'safe';
+          const effect =
+            mode === 'stop'
+              ? 'the guests are stopped for the whole backup, interrupting them until the backup finishes'
+              : mode === 'suspend'
+                ? 'the guests are suspended for the whole backup, interrupting them until the backup finishes'
+                : 'the guests keep running (QEMU snapshot)';
+          const summary = `Run backup job ${id} on ${node} with stored mode "${mode}": ${effect}.`;
+          return runGuarded(
+            deps.confirms,
+            { args, instance: name, action: `backup_job:run:${id}`, target: `${name}:backup-job:${id}`, risk, summary },
+            async () => {
+              const result = await controller.pvesh('create', `/nodes/${node}/vzdump`, {
+                params,
+                signal: exec?.signal,
+                timeoutMs: 120_000,
+              });
+              const upid = /UPID:[^\s"']+/.exec(result.stdout ?? '');
+              return { instance: name, action, id, node, upid: upid ? upid[0] : result.stdout };
+            },
+          );
         }
         const build = () => {
           const params = {};
