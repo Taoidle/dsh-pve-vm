@@ -21,11 +21,15 @@ import { lifecycleTools } from './tools/lifecycle.js';
 import { snapshotTools } from './tools/snapshot.js';
 import { storageTools } from './tools/storage.js';
 import { storageAdminTools } from './tools/storage-admin.js';
+import { vmDetailTools } from './tools/vm-detail.js';
+import { guestExtraTools } from './tools/guest-extra.js';
+import { passthroughTools } from './tools/passthrough.js';
 import { nodeTools } from './tools/node.js';
 import { clusterTools } from './tools/cluster.js';
 import { backupTools } from './tools/backup.js';
 import { backupJobTools } from './tools/backup-jobs.js';
 import { lxcTools } from './tools/lxc.js';
+import { lxcExtraTools } from './tools/lxc-extra.js';
 import { poolTools } from './tools/pools.js';
 import { accessTools } from './tools/access.js';
 import { networkTools } from './tools/network.js';
@@ -63,11 +67,15 @@ export function apply(ctx, config) {
     ...snapshotTools(deps),
     ...storageTools(deps),
     ...storageAdminTools(deps),
+    ...vmDetailTools(deps),
+    ...guestExtraTools(deps),
+    ...passthroughTools(deps),
     ...nodeTools(deps),
     ...clusterTools(deps),
     ...backupTools(deps),
     ...backupJobTools(deps),
     ...lxcTools(deps),
+    ...lxcExtraTools(deps),
     ...poolTools(deps),
     ...accessTools(deps),
     ...networkTools(deps),

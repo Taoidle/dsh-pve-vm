@@ -240,6 +240,7 @@ Every action tool accepts a common tail: `observe` (return a frame after the act
 | `vm_file_write` | `vmid`, `path`, `data` \| `dataBase64` | Write a file (up to 1 MiB per call, sent over stdin); parent directories are created. |
 | `vm_type_text` | `vmid`, `text`, `settleMs?`, `observe?` | Type text through the best available channel: ASCII → console, non-ASCII → the user session on Windows / `xdotool`–`wtype` on Linux. |
 | `vm_status` | `vmid?` | Is the VM allowed, does the agent answer, which OS, are there open console sessions. |
+| `vm_guest` | `vmid`, `action` = `cloudinit` \| `cloudinit-dump` \| `cloudinit-set` \| `cloudinit-pending` \| `fsfreeze` \| `password` \| `exec` \| `exec-status` \| `osinfo` \| `fsinfo` \| `interfaces`, `type?`, `settings?`, `keys?`, `freeze?`, `user?`, `password?`, `crypted?`, `path?`, `args?`, `inputData?`, `pid?`, `confirm?` | Cloud-init inspection/regeneration, filesystem freeze/thaw (a frozen guest stays quiesced until `freeze=false`), guest user passwords (never echoed), `exec` from allow-listed binary directories with `exec-status`, and the OS/filesystem/interface probes. Writes need a token. |
 
 ### Lifecycle, snapshots, storage, node and cluster
 
@@ -253,7 +254,7 @@ plugin still needs no PVE API token.
 | `vm_destroy` | `vmid`, `purge?`, `confirm?` | Delete the VM and its disks. `purge` also removes the backup/job references. |
 | `vm_snapshot` | `vmid`, `action` = `list` \| `create` \| `delete` \| `rollback`, `name?`, `description?`, `confirm?` | Snapshot management; `list` reads `/nodes/<node>/qemu/<id>/snapshot`. |
 | `vm_config` | `vmid`, `action` = `get` \| `pending` \| `set`, `settings?: ["key=value"]`, `confirm?` | Read or change the VM configuration (`qm set`; a bare `key` deletes it). |
-| `vm_disk` | `vmid`, `action` = `list` \| `rescan` \| `trim` \| `resize` \| `move` \| `attach-iso` \| `detach-iso`, `slot?`, `size?`, `storage?`, `iso?`, `deleteSource?`, `confirm?` | Disks and the ISO drive. `list` shows every `ideN\|sataN\|scsiN\|virtioN` slot with its current value. |
+| `vm_disk` | `vmid`, `action` = `list` \| `rescan` \| `trim` \| `resize` \| `move` \| `attach-iso` \| `detach-iso` \| `unlink` \| `pending-delete`, `slot?`, `slots?`, `key?`, `size?`, `storage?`, `iso?`, `deleteSource?`, `confirm?` | Disks and the ISO drive. `list` shows every `ideN\|sataN\|scsiN\|virtioN` slot and every detached `unusedN` volume; `unlink` deletes volumes and `pending-delete` drops a queued config change (PVE 7.4 has no `DELETE /pending`, so it uses `PUT /config` with `delete`). `unlink` and `pending-delete` need a token. |
 | `node_storage` | — | The node's storage list (type, content, free space). |
 | `node_status` | `action` = `overview` \| `apt` \| `services` \| `tasks` \| `syslog` \| `network`, `limit?` | Node read-only views. `overview` is trimmed to uptime, load, memory/rootfs, PVE and kernel version. |
 | `node_apt` | `action` = `update` \| `upgrade`, `reboot?`, `confirm?` | Refresh the package lists, or install the pending upgrades (a task; answers with its UPID). |
@@ -264,14 +265,16 @@ plugin still needs no PVE API token.
 | `vm_backup` | `action` = `list` \| `start` \| `restore`, `vmid?`, `storage?`, `mode?`, `archive?`, `confirm?` | `vzdump` tasks and `qmrestore`. `start` with `mode=stop` or `mode=suspend` interrupts the guest and needs a token; so does `restore`. |
 | `vm_clone` | `vmid`, `newid?`, `name?`, `full?`, `target?` | Clone a VM (full or linked). |
 | `vm_migrate` | `vmid`, `target`, `online?`, `withLocalDisks?`, `confirm?` | Move a VM to another cluster node. |
+| `vm_detail` | `vmid`, `action` = `rrddata` \| `feature`, `timeframe?`, `cf?`, `feature?`, `snapname?` | Read-only RRD history and the `snapshot`/`clone`/`copy` support probe — check before acting. |
+| `vm_passthrough` | `action` = `pci-list` \| `usb-list` \| `pci-attach` \| `usb-attach` \| `detach`, `vmid?`, `node?`, `slot?`, `id?`, `device?`, `kind?`, `pcie?`, `rombar?`, `xVga?`, `usb3?`, `confirm?` | Host PCI/USB lists and `hostpciN`/`usbN` attach or detach. Attach is danger, detach destroy; both need a token. PCI changes require the VM to be stopped on PVE 7.4. |
 
 ### Containers, scheduled backups, pools and templates
 
 Containers, backup jobs and pools are cluster objects, so they go through the Proxmox API and
 therefore need the API transport (an `apiToken` on the card, see above). Container ids share the
-number space with VM ids and are checked against the same `allowVmids` list — the one exception is
-`lxc_create`, which is allowed to pick a new id but the container has to be added to the list before
-it can be managed afterwards.
+number space with VM ids and are checked against the same `allowVmids` list — the exceptions are
+`lxc_create` and the `newid` of `lxc_clone`, which pick a new id, but the container has to be added to
+the list before it can be managed afterwards.
 
 | Tool | Parameters | What it does |
 |---|---|---|
@@ -285,6 +288,13 @@ it can be managed afterwards.
 | `lxc_delete` | `vmid`, `purge?`, `force?`, `confirm?` | Destroy the container and its disks; needs a token. |
 | `backup_job` | `action` = `list` \| `create` \| `update` \| `delete` \| `run`, `id?`, `storage?`, `schedule?`, `vmid?`, `mode?`, `compress?`, `enabled?`, `node?`, `confirm?` | Scheduled backup jobs (`/cluster/backup`). `run` reads the job first and then starts `vzdump` on the node that holds the guests; create/update/delete need a token, and `run` needs one when the stored mode is `stop` or `suspend`. |
 | `pve_pool` | `action` = `list` \| `create` \| `update` \| `delete`, `pool?`, `comment?`, `vms?`, `storage?`, `confirm?` | Resource pools and their members; `update` (which replaces the member list) and `delete` need a token. |
+| `lxc_clone` | `vmid`, `newid`, `hostname?`, `description?`, `storage?`, `full?`, `target?`, `pool?`, `snapname?`, `bwlimit?` | Clone a container; the task is awaited. |
+| `lxc_migrate` | `vmid`, `target`, `targetStorage?`, `online?`, `restart?`, `timeout?`, `bwlimit?`, `confirm?` | Move a container to another node; needs a token. |
+| `lxc_resize` | `vmid`, `disk`, `size`, `digest?` | Grow `rootfs`/`mpN` (`"+8G"` or `"32G"`); PVE refuses shrinking. |
+| `lxc_move_volume` | `vmid`, `volume`, `storage?` / `targetVmid?`, `targetVolume?`, `deleteSource?`, `digest?`, `targetDigest?`, `bwlimit?`, `confirm?` | Move a volume to another storage or container; `deleteSource` makes it destroy-risky. |
+| `lxc_template` | `vmid`, `confirm?` | Convert to a template (it can no longer start); needs a token. |
+| `lxc_feature` | `vmid`, `feature`, `snapname?` | Read-only check whether `snapshot`, `clone` or `copy` is supported (PVE 7.4 has no feature write endpoint). |
+| `lxc_rrddata` | `vmid`, `timeframe?`, `cf?` | Container RRD history (`hour`/`day`/`week`/`month`/`year`, `AVERAGE`/`MAX`). |
 | `vm_template` | `action` = `list` \| `convert`, `vmid?`, `confirm?` | List templates or turn a VM into one (a template cannot be started; clear the flag in the configuration to undo). |
 
 A new container starts out **outside** the allow list on purpose: creating a guest does not touch an
