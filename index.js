@@ -23,6 +23,9 @@ import { storageTools } from './tools/storage.js';
 import { nodeTools } from './tools/node.js';
 import { clusterTools } from './tools/cluster.js';
 import { backupTools } from './tools/backup.js';
+import { backupJobTools } from './tools/backup-jobs.js';
+import { lxcTools } from './tools/lxc.js';
+import { poolTools } from './tools/pools.js';
 
 export { Config };
 export const name = 'pve-vm';
@@ -58,6 +61,9 @@ export function apply(ctx, config) {
     ...nodeTools(deps),
     ...clusterTools(deps),
     ...backupTools(deps),
+    ...backupJobTools(deps),
+    ...lxcTools(deps),
+    ...poolTools(deps),
   ];
   for (const tool of tools) ctx.tools.register(tool);
 

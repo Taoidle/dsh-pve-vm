@@ -265,6 +265,31 @@ plugin still needs no PVE API token.
 | `vm_clone` | `vmid`, `newid?`, `name?`, `full?`, `target?` | Clone a VM (full or linked). |
 | `vm_migrate` | `vmid`, `target`, `online?`, `withLocalDisks?`, `confirm?` | Move a VM to another cluster node. |
 
+### Containers, scheduled backups, pools and templates
+
+Containers, backup jobs and pools are cluster objects, so they go through the Proxmox API and
+therefore need the API transport (an `apiToken` on the card, see above). Container ids share the
+number space with VM ids and are checked against the same `allowVmids` list — the one exception is
+`lxc_create`, which is allowed to pick a new id but the container has to be added to the list before
+it can be managed afterwards.
+
+| Tool | Parameters | What it does |
+|---|---|---|
+| `lxc_list` | `node?` | Every container in the cluster (or one node) with status, memory and the node it lives on. |
+| `lxc_status` | `vmid` | Runtime status and the full container configuration. |
+| `lxc_power` | `vmid`, `action` = `start` \| `shutdown` \| `stop` \| `reboot` \| `suspend` \| `resume`, `confirm?` | Lifecycle; `stop`, `reboot` and `suspend` need a token. Answer carries the status afterwards. |
+| `lxc_create` | `ostemplate`, `vmid?`, `hostname?`, `storage?`, `memory?`, `cores?`, `password?`, `start?`, `unprivileged?`, `node?` | Create a container from a template; the id defaults to `/cluster/nextid`. |
+| `lxc_config` | `vmid`, `action` = `get` \| `set`, `settings?: ["key=value"]`, `confirm?` | Read or change the configuration (`key` without `=` deletes it); writes need a token. |
+| `lxc_snapshot` | `vmid`, `action` = `list` \| `create` \| `delete` \| `rollback`, `name?`, `description?`, `confirm?` | Container snapshots; delete and rollback need a token. |
+| `lxc_exec` | `vmid`, `argv` | Run a command with `pct exec` over ssh (the REST API has no exec endpoint). `argv` is the program and its arguments, for example `["uname", "-a"]`. |
+| `lxc_delete` | `vmid`, `purge?`, `force?`, `confirm?` | Destroy the container and its disks; needs a token. |
+| `backup_job` | `action` = `list` \| `create` \| `update` \| `delete` \| `run`, `id?`, `storage?`, `schedule?`, `vmid?`, `mode?`, `compress?`, `enabled?`, `node?`, `confirm?` | Scheduled backup jobs (`/cluster/backup`). `run` reads the job first and then starts `vzdump` on the node that holds the guests; create/update/delete need a token. |
+| `pve_pool` | `action` = `list` \| `create` \| `update` \| `delete`, `pool?`, `comment?`, `vms?`, `storage?`, `confirm?` | Resource pools and their members; `delete` needs a token. |
+| `vm_template` | `action` = `list` \| `convert`, `vmid?`, `confirm?` | List templates or turn a VM into one (a template cannot be started; clear the flag in the configuration to undo). |
+
+A new container starts out **outside** the allow list on purpose: creating a guest does not touch an
+existing one, but managing it later is an explicit decision, so add its id to `allowVmids` first.
+
 ### Dangerous operations need a second confirmation
 
 A dangerous call does **nothing** on its first invocation. It returns

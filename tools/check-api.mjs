@@ -11,6 +11,10 @@ import http from 'node:http';
 import assert from 'node:assert/strict';
 import { ApiController, withSshFallback } from '../lib/api-controller.js';
 import { PveApi } from '../lib/api.js';
+import { ConfirmationStore } from '../lib/confirm.js';
+import { lxcTools } from './lxc.js';
+import { backupJobTools } from './backup-jobs.js';
+import { poolTools } from './pools.js';
 
 const problems = [];
 const check = (name, fn) => {
@@ -52,7 +56,10 @@ const server = http.createServer((request, response) => {
     if (path === '/api2/json/version') return answer({ version: '7.4-3', release: '7.4' });
     if (path === '/api2/json/nodes') return answer([{ node: 'pve-ci', status: 'online' }, { node: 'pve-2', status: 'online' }]);
     if (path === '/api2/json/cluster/resources') {
-      return answer([{ vmid: 104, node: 'pve-2', type: 'qemu', status: 'running' }]);
+      return answer([
+        { vmid: 104, node: 'pve-2', type: 'qemu', status: 'running' },
+        { vmid: 300, node: 'pve-ci', type: 'lxc', status: 'running', name: 'ct300' },
+      ]);
     }
     if (path === '/api2/json/nodes/pve-2/qemu/104/status/current') return answer({ status: 'running' });
     if (path === '/api2/json/nodes/pve-ci/qemu/104/status/current') return answer({ status: 'stopped' });
@@ -63,6 +70,28 @@ const server = http.createServer((request, response) => {
       return answer({ status: 'stopped', exitstatus: 'OK' });
     }
     if (path === '/api2/json/nodes/pve-ci/vzdump') return answer(UPID);
+    if (path === '/api2/json/cluster/backup') {
+      if (request.method === 'POST') return answer('backup-abc123');
+      return answer([
+        { id: 'backup-abc123', storage: 'local', schedule: '02:30', vmid: '100,101', mode: 'snapshot', compress: 'zstd', enabled: 1 },
+      ]);
+    }
+    if (path === '/api2/json/cluster/backup/backup-abc123') {
+      if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
+      return answer({ id: 'backup-abc123', storage: 'local', schedule: '02:30', vmid: '100,101', mode: 'snapshot', compress: 'zstd', enabled: 1 });
+    }
+    if (path === '/api2/json/pools') {
+      if (request.method === 'POST') return answer(null);
+      return answer([{ poolid: 'ci', comment: 'CI pool' }]);
+    }
+    if (path === '/api2/json/pools/ci') return answer({ poolid: 'ci', comment: 'CI pool', members: [{ id: 'qemu/104', type: 'qemu', vmid: 104 }] });
+    if (path === '/api2/json/nodes/pve-ci/lxc') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/status/current') return answer({ status: 'running' });
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/status/stop') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/status/start') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/status/shutdown') return answer(UPID);
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/config') return answer({ hostname: 'ct300', memory: 512 });
+    if (path === '/api2/json/nodes/pve-ci/lxc/300/snapshot') return answer([{ name: 'snap1' }]);
     return answer({ message: `unexpected ${request.method} ${path}` }, 500);
   });
 });
@@ -73,7 +102,7 @@ const apiUrl = `http://127.0.0.1:${port}`;
 
 const settings = {
   ssh: { host: 'pve-ci', user: 'root', port: 22, keyPath: '', sshConfig: '', extraOptions: [] },
-  allowVmids: [104],
+  allowVmids: [104, 300],
   instance: 'x99i',
   api: { url: apiUrl, token: TOKEN, fingerprint: '', insecureTls: false },
   node: '',
@@ -164,6 +193,96 @@ await check('the certificate fingerprint is normalised so either case matches', 
   assert.equal(pinned.fingerprint, 'aabbcc');
   pinned.close();
   api.close();
+});
+
+const toolDeps = {
+  pool: { target: () => ({ name: 'x99i', controller, settings }) },
+  settings: () => settings,
+  confirms: new ConfirmationStore(),
+};
+const byName = (list, name) => {
+  const found = list.find((tool) => tool.name === name);
+  if (found === undefined) throw new Error(`tool ${name} is not registered`);
+  return found;
+};
+const lxc = lxcTools(toolDeps);
+
+await checkAsync('lxc_list reads containers from /cluster/resources and honours the allow list', async () => {
+  const out = await byName(lxc, 'lxc_list').execute({}, {});
+  assert.equal(out.instance, 'x99i');
+  assert.deepEqual(out.containers.map((entry) => entry.vmid), [300]);
+  assert.equal(out.containers[0].node, 'pve-ci');
+});
+
+await checkAsync('lxc_status resolves the node and reads status plus config', async () => {
+  seen.length = 0;
+  const out = await byName(lxc, 'lxc_status').execute({ vmid: 300 }, {});
+  assert.equal(out.node, 'pve-ci');
+  assert.equal(out.config.hostname, 'ct300');
+  assert.ok(seen.some((entry) => entry.path.endsWith('/lxc/300/status/current')));
+});
+
+await checkAsync('lxc_power stop is gated: nothing happens before the token comes back', async () => {
+  const tool = byName(lxc, 'lxc_power');
+  seen.length = 0;
+  const first = await tool.execute({ vmid: 300, action: 'stop' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.path.endsWith('/status/stop')).length, 0);
+  const done = await tool.execute({ vmid: 300, action: 'stop', confirm: first.confirm }, {});
+  assert.equal(done.action, 'stop');
+  assert.ok(seen.some((entry) => entry.path.endsWith('/lxc/300/status/stop')));
+});
+
+await checkAsync('lxc_power start runs without a token', async () => {
+  const tool = byName(lxc, 'lxc_power');
+  seen.length = 0;
+  const out = await tool.execute({ vmid: 300, action: 'start' }, {});
+  assert.equal(out.action, 'start');
+  assert.ok(seen.some((entry) => entry.path.endsWith('/status/start')));
+});
+
+await checkAsync('lxc_create posts the template and the storage to /nodes/{node}/lxc', async () => {
+  const tool = byName(lxc, 'lxc_create');
+  seen.length = 0;
+  const out = await tool.execute({ ostemplate: 'local:vztmpl/debian-12.tar.zst', vmid: 301, storage: 'local-lvm', memory: 1024 }, {});
+  assert.equal(out.vmid, 301);
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/nodes/pve-ci/lxc'));
+  assert.ok(post, 'the create call was not posted');
+  const body = JSON.parse(post.body);
+  assert.equal(body.ostemplate, 'local:vztmpl/debian-12.tar.zst');
+  assert.equal(body.memory, 1024);
+  assert.equal(body.unprivileged, 1);
+});
+
+await checkAsync('backup_job run reuses the job record for vzdump', async () => {
+  const tool = byName(backupJobTools(toolDeps), 'backup_job');
+  seen.length = 0;
+  const out = await tool.execute({ action: 'run', id: 'backup-abc123' }, {});
+  assert.equal(out.node, 'pve-ci');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/vzdump'));
+  assert.ok(post, 'vzdump was not started');
+  const body = JSON.parse(post.body);
+  assert.equal(body.vmid, '100,101');
+  assert.equal(body.storage, 'local');
+});
+
+await checkAsync('backup_job create needs a token and answers the job id', async () => {
+  const tool = byName(backupJobTools(toolDeps), 'backup_job');
+  const first = await tool.execute({ action: 'create', storage: 'local', schedule: '02:30', vmid: '100' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const done = await tool.execute({ action: 'create', storage: 'local', schedule: '02:30', vmid: '100', confirm: first.confirm }, {});
+  assert.equal(done.id, 'backup-abc123');
+});
+
+await checkAsync('pve_pool creates a pool and lists one pool in detail', async () => {
+  const tool = byName(poolTools(toolDeps), 'pve_pool');
+  seen.length = 0;
+  const out = await tool.execute({ action: 'create', pool: 'lab', comment: 'lab' }, {});
+  assert.equal(out.pool, 'lab');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/pools'));
+  assert.ok(post, 'the pool was not created');
+  const detail = await tool.execute({ action: 'list', pool: 'ci' }, {});
+  assert.equal(detail.pools[0].members[0].vmid, 104);
 });
 
 controller.closeAll();

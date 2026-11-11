@@ -3,6 +3,25 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.6.0] — 2026-11-11
+
+### Added
+
+- LXC containers: `lxc_list`, `lxc_status`, `lxc_power`, `lxc_create`, `lxc_config`,
+  `lxc_snapshot`, `lxc_exec` and `lxc_delete`. Containers share the VM id space and the
+  `allowVmids` guard; `lxc_exec` runs `pct exec` over the existing ssh channel.
+- Scheduled backup jobs: `backup_job` lists, creates, updates, deletes and runs
+  `/cluster/backup` records, reusing the job's own storage, guests and mode for `vzdump`.
+- Resource pools and templates: `pve_pool` and `vm_template`.
+- New confirmed actions: container stop/reboot/suspend, configuration writes, snapshot
+  delete/rollback, container destroy, backup-job changes, pool deletion and the template
+  conversion — all through the same single-use confirmation token.
+
+### Changed
+
+- The management plane is the Proxmox API for these operations, so a card needs an
+  `apiToken`; instance-level `node` is used for creates when set, otherwise the online node.
+
 ## [0.5.0] — 2026-11-11
 
 ### Added
