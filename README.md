@@ -267,6 +267,20 @@ plugin still needs no PVE API token.
 | `vm_migrate` | `vmid`, `target`, `online?`, `withLocalDisks?`, `confirm?` | Move a VM to another cluster node. |
 | `vm_detail` | `vmid`, `action` = `rrddata` \| `feature`, `timeframe?`, `cf?`, `feature?`, `snapname?` | Read-only RRD history and the `snapshot`/`clone`/`copy` support probe — check before acting. |
 | `vm_passthrough` | `action` = `pci-list` \| `usb-list` \| `pci-attach` \| `usb-attach` \| `detach`, `vmid?`, `node?`, `slot?`, `id?`, `device?`, `kind?`, `pcie?`, `rombar?`, `xVga?`, `usb3?`, `confirm?` | Host PCI/USB lists and `hostpciN`/`usbN` attach or detach. Attach is danger, detach destroy; both need a token. PCI changes require the VM to be stopped on PVE 7.4. |
+| `cluster_ha` | `action` = `list` \| `get` \| `create` \| `update` \| `delete` \| `status` \| `groups` \| `group-get` \| `group-create` \| `group-update` \| `group-delete` \| `rules`, `sid?`, `type?`, `group?`, `nodes?`, `comment?`, `state?`, `max_relocate?`, `max_restart?`, `nofailback?`, `restricted?`, `delete?`, `digest?`, `confirm?` | HA resources, groups and current status. HA rules are a PVE 8 feature and answer "not available" here. Writes need a token. |
+| `cluster_replication` | `action` = `list` \| `get` \| `create` \| `update` \| `delete` \| `schedule_now`, `id?`, `target?`, `schedule?`, `type?`, `comment?`, `disable?`, `rate?`, `source?`, `remove_job?`, `delete?`, `digest?`, `force?`, `keep?`, `node?`, `confirm?` | Replication jobs and a one-off `schedule_now`. A new job needs `id`, `target` and `schedule`; `type` defaults to `local`. Writes need a token. |
+| `cluster_options` | `action` = `get` \| `set`, `changes?: ["key=value"]`, `delete?: ["key"]`, `confirm?` | Cluster-wide options. `set` is a confirmed PUT; `delete` removes the named keys. |
+| `cluster_metrics` | `action` = `list` \| `get` \| `create` \| `update` \| `delete` \| `influxdb` \| `influxdb-set`, `id?`, `type?`, `server?`, `port?`, `changes?: ["key=value"]`, `delete?`, `confirm?` | Metrics servers (`/cluster/metrics/server`). The legacy `/cluster/metrics/influxdb` endpoint is gone in 7.4 and answers "not available". Writes need a token. |
+| `cluster_tasks` | `type?`, `status?`, `user?`, `node?`, `vmid?`, `limit?` | Cluster task list, filtered client-side (the 7.4 API rejects those filters) and sorted newest first. |
+| `node_dns` | `action` = `get` \| `set`, `node?`, `search?`, `dns1?`, `dns2?`, `dns3?`, `confirm?` | Resolver settings; `set` needs `search` and is confirmed. |
+| `node_time` | `action` = `get` \| `set`, `node?`, `timezone?`, `confirm?` | Timezone; `set` is a confirmed PUT (7.4 has no POST variant). |
+| `node_disks` | `action` = `list` \| `smart` \| `zfs` \| `lvm` \| `directory`, `node?`, `disk?`, `healthonly?` | Physical disks and storage views. `smart` needs `disk` (`sda` or `/dev/sda`). Read-only. |
+| `node_apt_repos` | `action` = `get` \| `add-standard` \| `toggle`, `node?`, `handle?`, `index?`, `path?`, `enabled?`, `digest?`, `confirm?` | APT repository files, add a standard repository by `handle`, or enable/disable one entry. Writes need a token. |
+| `node_hosts` | `action` = `get` \| `write` \| `replace` \| `delete`, `node?`, `data?`, `digest?`, `confirm?` | `/etc/hosts`; `write` is a confirmed POST. `replace`/`delete` are PVE 8 shapes and answer "not available" on 7.4. |
+| `node_wakeonlan` | `node?`, `mac?` | Send a Wake-on-LAN packet from the node; the API takes no parameters, `mac` is echoed in the answer. |
+| `node_execute` | `mode` = `api` \| `shell`, `node?`, `commands?`, `script?`, `confirm?` | **Destroy risk.** `api` posts a batch of `{path, method, args}` API calls to `/nodes/<node>/execute`; `shell` is a plugin extension that runs a script as root over ssh. Both need a token. |
+| `node_rrddata` | `node?`, `timeframe` = `hour` \| `day` \| `week` \| `month` \| `year`, `cf?` | Node RRD samples, optionally consolidated with `AVERAGE`/`MAX`. |
+| `node_diagnostics` | `node?`, `maxChars?` | Diagnostic report. 7.4 has no `/diagnostics`; the tool falls back to `/nodes/<node>/report` and labels the source. |
 
 ### Containers, scheduled backups, pools and templates
 
@@ -328,6 +342,11 @@ token; `import-disk` adds the disk unattached, so assign it to `scsiN`/`virtioN`
 | `pve_role` | `action` = `list` \| `get` \| `create` \| `update` \| `delete`, `roleid?`, `privs?`, `append?`, `confirm?` | Roles and their privilege sets; `append` merges into the existing set instead of replacing it. Writes need a token. |
 | `pve_acl` | `action` = `list` \| `set` \| `remove`, `path`, `users?` / `groups?` / `tokens?` (exactly one), `roles`, `propagate?`, `confirm?` | ACL entries on an object path. `remove` sends `delete=1` on the same endpoint. Writes need a token. |
 | `pve_token` | `action` = `list` \| `create` \| `remove`, `userid`, `tokenid?`, `privsep?`, `comment?`, `expire?`, `confirm?` | API tokens of a user. **The secret is printed exactly once**, by `create`. Writes need a token. |
+| `pve_domain` | `action` = `list` \| `get` \| `create` \| `update` \| `delete` \| `sync`, `realm?`, `type?`, `options?: ["key=value"]`, `digest?`, `dry_run?`, `full?`, `purge?`, `enable_new?`, `remove_vanished?`, `scope?`, `confirm?` | Authentication realms and a directory `sync` (dash-named PVE parameters are mapped for you). Writes and `sync` need a token. |
+| `pve_tfa` | `action` = `list` \| `delete`, `userid`, `id?`, `password?`, `confirm?` | TFA entries of a user. Deletion goes through `/access/tfa/<userid>/<id>` (not the user path) and needs a token. |
+| `pve_permissions` | `action` = `list` \| `user`, `path?`, `userid?` | Effective permissions; the user view falls back to `/access/permissions?userid=` because 7.4 has no per-user child endpoint. Read-only. |
+| `pve_password` | `userid`, `password`, `confirm?` | Change the token owner's own password. **Danger**, confirmed, and the password is never echoed in the answer. |
+| `pve_token_rotate` | `userid`, `tokenid`, `privsep?`, `expire?`, `comment?`, `confirm?` | Rotate a token with `regenerate=1`; the old secret stops working, so this is **destroy** and confirmed. PVE 7.4 may reject `regenerate` — the tool reports that as "not available" instead of a failure. |
 
 ### Two tokens: an operator and an access manager
 
@@ -395,11 +414,28 @@ Because the probe is an API call and the timer is armed over ssh, `apply` needs 
 | Tool | Parameters | What it does |
 |---|---|---|
 | `pve_firewall` | `scope` = `cluster` \| `node` \| `guest`, `action` = `status` \| `enable` \| `disable` \| `policy` \| `rule-list` \| `rule-add` \| `rule-update` \| `rule-delete`, `vmid?` (guest scope), `rule_action`? (`ACCEPT`/`DROP`/`REJECT`), `rule_type`?, `dport`?, `sport`?, `source`?, `dest`?, `proto`?, `pos`?, `confirm?` | Firewall options and rules at cluster, node or guest level. Every write needs a token; cluster/node writes also arm the rollback timer. |
+| `pve_security_group` | `action` = `list` \| `get` \| `create` \| `delete` \| `rule-add` \| `rule-update` \| `rule-delete`, `group?`, `comment?`, `pos?`, `rule_action?`, `rule_type?`, `source?`, `dest?`, `proto?`, `dport?`, `sport?`, `iface?`, `log?`, `enable?`, `macro?`, `icmp_type?`, `moveto?`, `digest?`, `confirm?` | Cluster security groups and their rules. Writes need a token. |
+| `pve_ipset` | `action` = `list` \| `get` \| `create` \| `delete` \| `entry-add` \| `entry-update` \| `entry-delete`, `name?`, `comment?`, `cidr?`, `nomatch?`, `force?`, `digest?`, `confirm?` | Cluster IPSets and their CIDR entries. CIDRs are validated before the request; writes need a token. |
+| `pve_alias` | `action` = `list` \| `get` \| `create` \| `update` \| `delete`, `name?`, `cidr?`, `comment?`, `rename?`, `digest?`, `confirm?` | Cluster aliases. `update` fetches the current CIDR when it is omitted; writes need a token. |
+| `pve_firewall_extra` | `action` = `options` \| `options-set` \| `log` \| `refs`, `node?`, `changes?: ["key=value"]`, `delete?`, `limit?`, `since?`, `start?`, `until?`, `type?`, `confirm?` | Cluster firewall options (confirmed PUT), the node firewall log, and alias/IPSet references. Enabling the firewall can cut the management path, so `options-set` warns in its summary. |
 
 `status` counts the management ports (**8006** and **22**) that have no `ACCEPT` input rule, and
 `enable` warns when the count is not zero: enabling a DROP policy without an allow rule for the plugin's
 own traffic cuts the plugin off. Cluster and node writes copy `cluster.fw` / `host.fw` aside, arm the
 same timer with `pve-firewall restart`, apply and probe; guest-level rules are plain writes.
+
+### Certificates, subscriptions and notifications
+
+`pve_certificate` manages the node certificate (custom PEM upload, ACME order/renew/revoke); the
+ACME actions live under `/certificates/acme/certificate` on 7.4. `pve_subscription` reads, sets or
+removes the subscription key. `pve_notifications` probes `/cluster/notifications/endpoints`; PVE 7.4
+does not have that API, so the tool answers “not available on this PVE version” instead of failing.
+
+| Tool | Parameters | What it does |
+|---|---|---|
+| `pve_certificate` | `action` = `info` \| `upload` \| `delete-custom` \| `acme-order` \| `acme-renew` \| `acme-revoke`, `node?`, `certificates?`, `key?`, `force?`, `restart?`, `confirm?` | Certificate store and custom/ACME certificate lifecycle. Writes are **danger** and need a token. |
+| `pve_subscription` | `action` = `get` \| `set` \| `check` \| `delete`, `node?`, `key?`, `force?`, `confirm?` | Subscription status, key change (validated against the PVE key shape), an info refresh, or removal. `set` and `delete` need a token. |
+| `pve_notifications` | `type?` | Probe the notification endpoints API; on 7.4 it returns `available: false` with an explanation. Read-only. |
 
 ### Dangerous operations need a second confirmation
 

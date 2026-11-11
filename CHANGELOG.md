@@ -19,6 +19,22 @@ All notable changes to this plugin are documented here. The format follows
 - `vm_disk` — `unlink`, `pending-delete`, and detached `unusedN` volumes in `list`.
 - `lxc_clone`, `lxc_migrate`, `lxc_resize`, `lxc_move_volume`, `lxc_template`, `lxc_feature` and
   `lxc_rrddata`; the task-returning calls await their UPID.
+- `cluster_ha` — HA resources, groups and current status; `cluster_replication` — replication jobs and
+  `schedule_now`; `cluster_options` — cluster-wide options; `cluster_metrics` — metrics servers;
+  `cluster_tasks` — the cluster task list with client-side filtering.
+- `node_dns`, `node_time`, `node_disks`, `node_apt_repos`, `node_hosts`, `node_wakeonlan`,
+  `node_execute`, `node_rrddata` and `node_diagnostics` — the remaining node administration views and
+  writes, including the `/nodes/<node>/execute` batch endpoint and the `/report` diagnostic fallback.
+- `pve_domain`, `pve_tfa`, `pve_permissions`, `pve_password` and `pve_token_rotate` — realm management,
+  TFA entries, effective permissions, the token owner's own password and token rotation.
+- `pve_security_group`, `pve_ipset`, `pve_alias` and `pve_firewall_extra` — security groups, IPSets,
+  aliases, cluster firewall options, the node firewall log and references.
+- `pve_certificate`, `pve_subscription` and `pve_notifications` — certificate lifecycle, subscription
+  key management and the notification-endpoints probe.
+- `lib/admin-util.js` — shared validators, node resolution, confirmation of block text (PEM, hosts,
+  scripts) and the "feature is not in this PVE release" answer.
+- README sections for the new tools; the mock-server suite now covers every new tool, its confirmation
+  gate and the 404/501 fallbacks.
 
 ### Changed
 
@@ -49,6 +65,8 @@ All notable changes to this plugin are documented here. The format follows
   `pvesh` exit code and raise `NODE_COMMAND_FAILED` with the stderr instead of reporting success.
 - The offline suite pins the new gates: dangerous backups, pool updates and LXC shutdown perform
   nothing without a token, and a failing storage write surfaces its error.
+- Tools that take multi-line text (custom certificates, `/etc/hosts`, shell scripts) no longer trim the
+  trailing newline or interior whitespace before sending it to the API.
 
 ## [0.9.2] — 2026-11-11
 

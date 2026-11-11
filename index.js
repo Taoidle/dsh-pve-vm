@@ -34,6 +34,11 @@ import { poolTools } from './tools/pools.js';
 import { accessTools } from './tools/access.js';
 import { networkTools } from './tools/network.js';
 import { firewallTools } from './tools/firewall.js';
+import { clusterExtraTools } from './tools/cluster-extra.js';
+import { nodeExtraTools } from './tools/node-extra.js';
+import { accessExtraTools } from './tools/access-extra.js';
+import { firewallExtraTools } from './tools/firewall-extra.js';
+import { monitorExtraTools } from './tools/monitor-extra.js';
 
 export { Config };
 export const name = 'pve-vm';
@@ -80,6 +85,11 @@ export function apply(ctx, config) {
     ...accessTools(deps),
     ...networkTools(deps),
     ...firewallTools(deps),
+    ...clusterExtraTools(deps),
+    ...nodeExtraTools(deps),
+    ...accessExtraTools(deps),
+    ...firewallExtraTools(deps),
+    ...monitorExtraTools(deps),
   ];
   for (const tool of tools) ctx.tools.register(tool);
 
