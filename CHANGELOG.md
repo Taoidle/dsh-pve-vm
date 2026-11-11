@@ -3,6 +3,32 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `cluster_ha` — HA resources, groups and current status; `cluster_replication` — replication jobs and
+  `schedule_now`; `cluster_options` — cluster-wide options; `cluster_metrics` — metrics servers;
+  `cluster_tasks` — the cluster task list with client-side filtering.
+- `node_dns`, `node_time`, `node_disks`, `node_apt_repos`, `node_hosts`, `node_wakeonlan`,
+  `node_execute`, `node_rrddata` and `node_diagnostics` — the remaining node administration views and
+  writes, including the `/nodes/<node>/execute` batch endpoint and the `/report` diagnostic fallback.
+- `pve_domain`, `pve_tfa`, `pve_permissions`, `pve_password` and `pve_token_rotate` — realm management,
+  TFA entries, effective permissions, the token owner's own password and token rotation.
+- `pve_security_group`, `pve_ipset`, `pve_alias` and `pve_firewall_extra` — security groups, IPSets,
+  aliases, cluster firewall options, the node firewall log and references.
+- `pve_certificate`, `pve_subscription` and `pve_notifications` — certificate lifecycle, subscription
+  key management and the notification-endpoints probe.
+- `lib/admin-util.js` — shared validators, node resolution, confirmation of block text (PEM, hosts,
+  scripts) and the "feature is not in this PVE release" answer.
+- README sections for the new tools; the mock-server suite now covers every new tool, its confirmation
+  gate and the 404/501 fallbacks.
+
+### Fixed
+
+- Tools that take multi-line text (custom certificates, `/etc/hosts`, shell scripts) no longer trim the
+  trailing newline or interior whitespace before sending it to the API.
+
 ## [0.9.2] — 2026-11-11
 
 ### Fixed

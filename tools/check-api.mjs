@@ -20,6 +20,11 @@ import { backupJobTools } from './backup-jobs.js';
 import { poolTools } from './pools.js';
 import { storageAdminTools } from './storage-admin.js';
 import { accessTools } from './access.js';
+import { clusterExtraTools } from './cluster-extra.js';
+import { nodeExtraTools } from './node-extra.js';
+import { accessExtraTools } from './access-extra.js';
+import { firewallExtraTools } from './firewall-extra.js';
+import { monitorExtraTools } from './monitor-extra.js';
 
 const problems = [];
 const check = (name, fn) => {
@@ -159,6 +164,169 @@ const server = http.createServer((request, response) => {
     if (path === `/api2/json/access/users/${encodeURIComponent('root@pam')}/token/dsh-admin` && request.method === 'DELETE') {
       return answer(null);
     }
+    const fail = (message, status = 501) => {
+      response.writeHead(status, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ data: null, message }));
+    };
+
+    // --- cluster extra tools ---
+    if (path === '/api2/json/cluster/ha/resources') {
+      if (request.method === 'POST') return answer(null);
+      return answer([{ sid: 'vm:104', type: 'vm', state: 'started', group: 'nodes' }]);
+    }
+    if (path === `/api2/json/cluster/ha/resources/${encodeURIComponent('vm:104')}`) {
+      if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
+      return answer({ sid: 'vm:104', type: 'vm', state: 'started' });
+    }
+    if (path === '/api2/json/cluster/ha/groups') {
+      if (request.method === 'POST') return answer(null);
+      return answer([{ group: 'nodes', nodes: 'pve-ci:1', restricted: 0 }]);
+    }
+    if (path === '/api2/json/cluster/ha/groups/nodes') {
+      if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
+      return answer({ group: 'nodes', nodes: 'pve-ci:1' });
+    }
+    if (path === '/api2/json/cluster/ha/status/current') {
+      return answer([{ id: 'quorum', type: 'quorum', status: 'OK', node: 'pve-ci', quorate: 1 }]);
+    }
+    if (path === '/api2/json/cluster/ha/rules') return fail('no such resource');
+    if (path === '/api2/json/cluster/replication') {
+      if (request.method === 'POST') return answer(null);
+      return answer([{ id: '104-0', source: 'pve-ci', target: 'pve-2', schedule: '*/15', disable: 0 }]);
+    }
+    if (path === '/api2/json/cluster/replication/104-0') {
+      if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
+      return answer({ id: '104-0', source: 'pve-ci', target: 'pve-2', schedule: '*/15' });
+    }
+    if (path === '/api2/json/nodes/pve-ci/replication/104-0/schedule_now' && request.method === 'POST') return answer(null);
+    if (path === '/api2/json/cluster/options') {
+      if (request.method === 'PUT') return answer(null);
+      return answer({ language: 'en', console: 'xtermjs' });
+    }
+    if (path === '/api2/json/cluster/metrics/server') {
+      if (request.method === 'POST') return answer(null);
+      return answer([{ id: 'influx', type: 'influxdb', server: 'metrics.lab', port: 8089, disable: 0 }]);
+    }
+    if (path === '/api2/json/cluster/metrics/server/influx') {
+      if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
+      return answer({ id: 'influx', type: 'influxdb', server: 'metrics.lab', port: 8089 });
+    }
+    if (path === '/api2/json/cluster/metrics/influxdb') return fail('no such resource');
+    if (path === '/api2/json/cluster/tasks') {
+      return answer([
+        { upid: 'UPID:pve-ci:00000001:00000001:64F00001:qmstart:104:root@pam:', type: 'qmstart', id: '104', status: 'OK', node: 'pve-ci', user: 'root@pam', starttime: 1_700_000_100 },
+        { upid: 'UPID:pve-ci:00000002:00000002:64F00000:vzdump:104:root@pam:', type: 'vzdump', id: '104', status: 'OK', node: 'pve-ci', user: 'root@pam', starttime: 1_700_000_000 },
+      ]);
+    }
+
+    // --- node extra tools ---
+    if (path === '/api2/json/nodes/pve-ci/dns') {
+      if (request.method === 'PUT') return answer(null);
+      return answer({ search: 'lab', dns1: '1.1.1.1' });
+    }
+    if (path === '/api2/json/nodes/pve-ci/time') {
+      if (request.method === 'PUT') return answer(null);
+      return answer({ timezone: 'UTC', localtime: 1_700_000_000 });
+    }
+    if (path === '/api2/json/nodes/pve-ci/disks/list') {
+      return answer([{ devpath: '/dev/sda', model: 'Samsung SSD', size: 512_110_190_592, health: 'PASSED' }]);
+    }
+    if (path === '/api2/json/nodes/pve-ci/disks/smart') return answer({ health: 'PASSED', type: 'ata' });
+    if (path === '/api2/json/nodes/pve-ci/disks/zfs') return answer([{ name: 'tank', state: 'ONLINE' }]);
+    if (path === '/api2/json/nodes/pve-ci/disks/lvm') return answer([{ name: 'pve', size: '100G' }]);
+    if (path === '/api2/json/nodes/pve-ci/disks/directory') return answer([{ path: '/var/lib/vz' }]);
+    if (path === '/api2/json/nodes/pve-ci/apt/repositories') {
+      if (request.method === 'PUT' || request.method === 'POST') return answer(null);
+      return answer({ files: [{ path: '/etc/apt/sources.list', repositories: [{ index: 0, enabled: 1, handle: 'no-subscription' }] }] });
+    }
+    if (path === '/api2/json/nodes/pve-ci/hosts') {
+      if (request.method === 'PUT' || request.method === 'DELETE') return fail('no such resource');
+      if (request.method === 'POST') return answer(null);
+      return answer({ data: '127.0.0.1 localhost\n192.168.2.220 pve-ci\n', digest: 'hosts-digest' });
+    }
+    if (path === '/api2/json/nodes/pve-ci/wakeonlan' && request.method === 'POST') return answer(null);
+    if (path === '/api2/json/nodes/pve-ci/execute' && request.method === 'POST') {
+      return answer([{ data: { release: '7.4', version: '7.4-3' }, status: 200 }]);
+    }
+    if (path === '/api2/json/nodes/pve-ci/rrddata') return answer([{ time: 1_700_000_000, cpu: 0.08, memused: 2_000_000_000 }]);
+    if (path === '/api2/json/nodes/pve-ci/diagnostics') return fail('no such resource');
+    if (path === '/api2/json/nodes/pve-ci/report') return answer('PVE REPORT\npveversion: 7.4\nhostname: pve-ci\n');
+    if (path === '/api2/json/nodes/pve-ci/subscription') {
+      if (request.method === 'PUT' || request.method === 'POST' || request.method === 'DELETE') return answer(null);
+      return answer({ status: 'Active', level: 'c', key: 'pve8c-0123456789', nextduedate: '2027-01-01' });
+    }
+    if (path === '/api2/json/nodes/pve-ci/certificates/info') {
+      return answer([{ filename: 'pveproxy-ssl.pem', subject: 'CN=pve-ci', issuer: 'CN=lab-ca', notafter: '2027-01-01' }]);
+    }
+    if (path === '/api2/json/nodes/pve-ci/certificates/custom' && (request.method === 'POST' || request.method === 'DELETE')) {
+      return answer(null);
+    }
+    if (path === '/api2/json/nodes/pve-ci/certificates/acme/certificate' && ['POST', 'PUT', 'DELETE'].includes(request.method)) {
+      return answer(null);
+    }
+    if (path === '/api2/json/cluster/notifications/endpoints') return fail('no such resource');
+
+    // --- access extra tools ---
+    if (path === '/api2/json/access/domains') {
+      if (request.method === 'POST') return answer(null);
+      return answer([{ realm: 'pam', type: 'pam', comment: 'Linux PAM' }]);
+    }
+    if (path === '/api2/json/access/domains/pam') {
+      if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
+      return answer({ realm: 'pam', type: 'pam', comment: 'Linux PAM' });
+    }
+    if (path === '/api2/json/access/domains/pam/sync' && request.method === 'POST') return answer('sync-job-1');
+    if (path === `/api2/json/access/users/${encodeURIComponent('root@pam')}/tfa`) {
+      return answer([{ id: 'totp-1', type: 'totp', enable: 1, description: 'phone' }]);
+    }
+    if (path === `/api2/json/access/tfa/${encodeURIComponent('root@pam')}/totp-1` && request.method === 'DELETE') return answer(null);
+    if (path === '/api2/json/access/permissions') {
+      return answer({ '/': { 'Sys.Audit': 1 }, '/vms/104': { 'VM.Audit': 1 } });
+    }
+    if (path === `/api2/json/access/users/${encodeURIComponent('root@pam')}/permissions`) return fail('no such resource');
+    if (path === '/api2/json/access/password' && request.method === 'PUT') return answer(null);
+    if (path === `/api2/json/access/users/${encodeURIComponent('root@pam')}/token/dsh-rotate` && request.method === 'PUT') {
+      return answer({ value: 'new-secret-value', privsep: 1 });
+    }
+
+    // --- firewall extra tools ---
+    if (path === '/api2/json/cluster/firewall/groups') {
+      if (request.method === 'POST') return answer(null);
+      return answer([{ group: 'web', comment: 'web servers' }]);
+    }
+    if (path === '/api2/json/cluster/firewall/groups/web') {
+      if (request.method === 'POST' || request.method === 'DELETE') return answer(null);
+      return answer([{ pos: 0, action: 'ACCEPT', type: 'in', proto: 'tcp', dport: '22' }]);
+    }
+    if (path === '/api2/json/cluster/firewall/groups/web/0' && (request.method === 'PUT' || request.method === 'DELETE')) return answer(null);
+    if (path === '/api2/json/cluster/firewall/ipset') {
+      if (request.method === 'POST') return answer(null);
+      return answer([{ name: 'blocked', comment: 'blocked ranges' }]);
+    }
+    if (path === '/api2/json/cluster/firewall/ipset/blocked') {
+      if (request.method === 'POST' || request.method === 'DELETE') return answer(null);
+      return answer([{ cidr: '10.0.0.0/8', nomatch: 0 }]);
+    }
+    if (path === `/api2/json/cluster/firewall/ipset/blocked/${encodeURIComponent('10.0.0.0/8')}` && (request.method === 'PUT' || request.method === 'DELETE')) {
+      return answer(null);
+    }
+    if (path === '/api2/json/cluster/firewall/aliases') {
+      if (request.method === 'POST') return answer(null);
+      return answer([{ name: 'dns', cidr: '1.1.1.1', comment: 'DNS' }]);
+    }
+    if (path === '/api2/json/cluster/firewall/aliases/dns') {
+      if (request.method === 'PUT' || request.method === 'DELETE') return answer(null);
+      return answer({ name: 'dns', cidr: '1.1.1.1', comment: 'DNS' });
+    }
+    if (path === '/api2/json/cluster/firewall/options') {
+      if (request.method === 'PUT') return answer(null);
+      return answer({ enable: 1, policy_in: 'DROP', policy_out: 'ACCEPT' });
+    }
+    if (path === '/api2/json/cluster/firewall/refs') return answer({ alias: [{ name: 'dns', ref: '/cluster/firewall/rules/0' }] });
+    if (path === '/api2/json/nodes/pve-ci/firewall/log') {
+      return answer([{ n: 1, t: '1700000000', d: 'ACCEPT tcp -- 1.2.3.4 0.0.0.0/0 tcp dpt:22' }]);
+    }
+
     return answer({ message: `unexpected ${request.method} ${path}` }, 500);
   });
 });
@@ -567,6 +735,361 @@ await checkAsync('pve_token remove is gated and deletes the token path', async (
   assert.equal(first.status, 'confirmation-required');
   await tool.execute({ action: 'remove', userid: 'root@pam', tokenid: 'dsh-admin', confirm: first.confirm }, {});
   assert.ok(seen.some((entry) => entry.method === 'DELETE' && entry.path.endsWith('/token/dsh-admin')));
+});
+
+const clusterExtra = clusterExtraTools(toolDeps);
+const nodeExtra = nodeExtraTools(toolDeps);
+const accessExtra = accessExtraTools(toolDeps);
+const firewallExtra = firewallExtraTools(toolDeps);
+const monitorExtra = monitorExtraTools(toolDeps);
+
+await checkAsync('cluster_ha lists resources/status and tolerates missing HA rules', async () => {
+  const tool = byName(clusterExtra, 'cluster_ha');
+  const list = await tool.execute({ action: 'list' }, {});
+  assert.equal(list.resources[0].sid, 'vm:104');
+  const status = await tool.execute({ action: 'status' }, {});
+  assert.equal(status.status[0].id, 'quorum');
+  const rules = await tool.execute({ action: 'rules' }, {});
+  assert.equal(rules.available, false);
+  assert.match(rules.note, /PVE 8/);
+});
+
+await checkAsync('cluster_ha create is gated and posts sid/state', async () => {
+  const tool = byName(clusterExtra, 'cluster_ha');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'create', sid: 'vm:105', state: 'started' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'POST').length, 0);
+  const done = await tool.execute({ action: 'create', sid: 'vm:105', state: 'started', confirm: first.confirm }, {});
+  assert.equal(done.sid, 'vm:105');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/cluster/ha/resources');
+  assert.deepEqual(JSON.parse(post.body), { sid: 'vm:105', state: 'started' });
+});
+
+await checkAsync('cluster_ha group-create is gated and posts group/nodes', async () => {
+  const tool = byName(clusterExtra, 'cluster_ha');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'group-create', group: 'edge', nodes: 'pve-ci:1' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const done = await tool.execute({ action: 'group-create', group: 'edge', nodes: 'pve-ci:1', confirm: first.confirm }, {});
+  assert.equal(done.group, 'edge');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/cluster/ha/groups');
+  assert.equal(JSON.parse(post.body).nodes, 'pve-ci:1');
+});
+
+await checkAsync('cluster_replication lists jobs, schedules one now, and gates create', async () => {
+  const tool = byName(clusterExtra, 'cluster_replication');
+  const list = await tool.execute({ action: 'list' }, {});
+  assert.equal(list.jobs[0].id, '104-0');
+  const now = await tool.execute({ action: 'schedule_now', id: '104-0' }, {});
+  assert.equal(now.node, 'pve-ci');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'create', id: '105-0', target: 'pve-2', schedule: '*/15' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'POST').length, 0);
+  const done = await tool.execute({ action: 'create', id: '105-0', target: 'pve-2', schedule: '*/15', confirm: first.confirm }, {});
+  assert.equal(done.id, '105-0');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/cluster/replication');
+  assert.deepEqual(JSON.parse(post.body), { id: '105-0', target: 'pve-2', schedule: '*/15', type: 'local' });
+});
+
+await checkAsync('cluster_options reads and gates the PUT', async () => {
+  const tool = byName(clusterExtra, 'cluster_options');
+  const options = await tool.execute({ action: 'get' }, {});
+  assert.equal(options.options.language, 'en');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'set', changes: ['language=en'] }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'PUT').length, 0);
+  await tool.execute({ action: 'set', changes: ['language=en'], confirm: first.confirm }, {});
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path === '/api2/json/cluster/options');
+  assert.deepEqual(JSON.parse(put.body), { language: 'en' });
+});
+
+await checkAsync('cluster_metrics lists servers, gates create and tolerates the legacy endpoint', async () => {
+  const tool = byName(clusterExtra, 'cluster_metrics');
+  const list = await tool.execute({ action: 'list' }, {});
+  assert.equal(list.servers[0].id, 'influx');
+  const legacy = await tool.execute({ action: 'influxdb' }, {});
+  assert.equal(legacy.available, false);
+  seen.length = 0;
+  const first = await tool.execute({ action: 'create', id: 'influx2', type: 'influxdb', server: 'metrics.lab', port: 8089 }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const done = await tool.execute({ action: 'create', id: 'influx2', type: 'influxdb', server: 'metrics.lab', port: 8089, confirm: first.confirm }, {});
+  assert.equal(done.id, 'influx2');
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/cluster/metrics/server');
+  assert.equal(JSON.parse(post.body).port, 8089);
+});
+
+await checkAsync('cluster_tasks filters client-side and sorts newest first', async () => {
+  const tool = byName(clusterExtra, 'cluster_tasks');
+  const out = await tool.execute({ type: 'qmstart' }, {});
+  assert.equal(out.total, 1);
+  assert.equal(out.tasks[0].type, 'qmstart');
+  const all = await tool.execute({}, {});
+  assert.equal(all.tasks[0].type, 'qmstart');
+});
+
+await checkAsync('node_dns reads and gates the set', async () => {
+  const tool = byName(nodeExtra, 'node_dns');
+  const dns = await tool.execute({ action: 'get' }, {});
+  assert.equal(dns.dns.search, 'lab');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'set', search: 'lab', dns1: '1.1.1.1' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'set', search: 'lab', dns1: '1.1.1.1', confirm: first.confirm }, {});
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/nodes/pve-ci/dns'));
+  assert.deepEqual(JSON.parse(put.body), { search: 'lab', dns1: '1.1.1.1' });
+});
+
+await checkAsync('node_time reads and gates the timezone change', async () => {
+  const tool = byName(nodeExtra, 'node_time');
+  const time = await tool.execute({ action: 'get' }, {});
+  assert.equal(time.time.timezone, 'UTC');
+  const first = await tool.execute({ action: 'set', timezone: 'Asia/Shanghai' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'set', timezone: 'Asia/Shanghai', confirm: first.confirm }, {});
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/nodes/pve-ci/time'));
+  assert.deepEqual(JSON.parse(put.body), { timezone: 'Asia/Shanghai' });
+});
+
+await checkAsync('node_disks lists, reads SMART for /dev/sda and lists ZFS pools', async () => {
+  const tool = byName(nodeExtra, 'node_disks');
+  const list = await tool.execute({ action: 'list' }, {});
+  assert.equal(list.disks[0].devpath, '/dev/sda');
+  seen.length = 0;
+  const smart = await tool.execute({ action: 'smart', disk: 'sda' }, {});
+  assert.equal(smart.disk, '/dev/sda');
+  assert.equal(smart.smart.health, 'PASSED');
+  const call = seen.find((entry) => entry.path.endsWith('/disks/smart'));
+  assert.match(call.query, /disk=%2Fdev%2Fsda/);
+  const zfs = await tool.execute({ action: 'zfs' }, {});
+  assert.equal(zfs.entries[0].name, 'tank');
+});
+
+await checkAsync('node_apt_repos reads and gates add-standard', async () => {
+  const tool = byName(nodeExtra, 'node_apt_repos');
+  const repos = await tool.execute({ action: 'get' }, {});
+  assert.equal(repos.repositories.files[0].path, '/etc/apt/sources.list');
+  const first = await tool.execute({ action: 'add-standard', handle: 'no-subscription' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'add-standard', handle: 'no-subscription', confirm: first.confirm }, {});
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/apt/repositories'));
+  assert.deepEqual(JSON.parse(put.body), { handle: 'no-subscription' });
+});
+
+await checkAsync('node_hosts writes the file and degrades replace/delete on 7.4', async () => {
+  const tool = byName(nodeExtra, 'node_hosts');
+  const current = await tool.execute({ action: 'get' }, {});
+  assert.match(current.hosts.data, /pve-ci/);
+  const first = await tool.execute({ action: 'write', data: '127.0.0.1 localhost\n' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'write', data: '127.0.0.1 localhost\n', confirm: first.confirm }, {});
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/hosts'));
+  assert.equal(JSON.parse(post.body).data, '127.0.0.1 localhost\n');
+  const replaceFirst = await tool.execute({ action: 'replace', data: '127.0.0.1 localhost\n' }, {});
+  const replaced = await tool.execute({ action: 'replace', data: '127.0.0.1 localhost\n', confirm: replaceFirst.confirm }, {});
+  assert.equal(replaced.available, false);
+});
+
+await checkAsync('node_wakeonlan posts to the node endpoint', async () => {
+  const tool = byName(nodeExtra, 'node_wakeonlan');
+  seen.length = 0;
+  const out = await tool.execute({ mac: 'aa:bb:cc:dd:ee:ff' }, {});
+  assert.equal(out.node, 'pve-ci');
+  assert.ok(seen.some((entry) => entry.method === 'POST' && entry.path.endsWith('/wakeonlan')));
+});
+
+await checkAsync('node_execute gates the batch and posts commands as a JSON string', async () => {
+  const tool = byName(nodeExtra, 'node_execute');
+  seen.length = 0;
+  const first = await tool.execute({ mode: 'api', commands: [{ path: '/version', method: 'GET' }] }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method === 'POST').length, 0);
+  const out = await tool.execute({ mode: 'api', commands: [{ path: '/version', method: 'GET' }], confirm: first.confirm }, {});
+  assert.equal(out.results[0].status, 200);
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/execute'));
+  assert.deepEqual(JSON.parse(JSON.parse(post.body).commands), [{ path: '/version', method: 'GET' }]);
+});
+
+await checkAsync('node_execute shell mode is destroy-gated and sends nothing before the token', async () => {
+  const tool = byName(nodeExtra, 'node_execute');
+  seen.length = 0;
+  const first = await tool.execute({ mode: 'shell', script: 'echo hi' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.filter((entry) => entry.method !== 'GET').length, 0);
+});
+
+await checkAsync('node_rrddata asks for the time frame', async () => {
+  const tool = byName(nodeExtra, 'node_rrddata');
+  seen.length = 0;
+  const out = await tool.execute({ timeframe: 'day' }, {});
+  assert.equal(out.data.length, 1);
+  const call = seen.find((entry) => entry.path.endsWith('/rrddata'));
+  assert.match(call.query, /timeframe=day/);
+});
+
+await checkAsync('node_diagnostics falls back to /report on 7.4', async () => {
+  const tool = byName(nodeExtra, 'node_diagnostics');
+  seen.length = 0;
+  const out = await tool.execute({}, {});
+  assert.equal(out.source, 'report');
+  assert.match(out.report, /PVE REPORT/);
+  assert.ok(seen.some((entry) => entry.path.endsWith('/diagnostics')));
+  assert.ok(seen.some((entry) => entry.path.endsWith('/report')));
+});
+
+await checkAsync('pve_domain lists, gates create and maps sync options to hyphen names', async () => {
+  const tool = byName(accessExtra, 'pve_domain');
+  const list = await tool.execute({ action: 'list' }, {});
+  assert.equal(list.domains[0].realm, 'pam');
+  const first = await tool.execute({ action: 'create', realm: 'ad', type: 'ad', options: ['server1=ldap.lab'] }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'create', realm: 'ad', type: 'ad', options: ['server1=ldap.lab'], confirm: first.confirm }, {});
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/access/domains');
+  assert.equal(JSON.parse(post.body).realm, 'ad');
+  const syncFirst = await tool.execute({ action: 'sync', realm: 'pam', dry_run: true, scope: 'users' }, {});
+  assert.equal(syncFirst.status, 'confirmation-required');
+  await tool.execute({ action: 'sync', realm: 'pam', dry_run: true, scope: 'users', confirm: syncFirst.confirm }, {});
+  const sync = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/access/domains/pam/sync'));
+  assert.deepEqual(JSON.parse(sync.body), { scope: 'users', 'dry-run': 1 });
+});
+
+await checkAsync('pve_tfa lists entries and gates deletion at /access/tfa', async () => {
+  const tool = byName(accessExtra, 'pve_tfa');
+  const list = await tool.execute({ action: 'list', userid: 'root@pam' }, {});
+  assert.equal(list.entries[0].id, 'totp-1');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'delete', userid: 'root@pam', id: 'totp-1' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'delete', userid: 'root@pam', id: 'totp-1', confirm: first.confirm }, {});
+  assert.ok(seen.some((entry) => entry.method === 'DELETE' && entry.path === `/api2/json/access/tfa/${encodeURIComponent('root@pam')}/totp-1`));
+});
+
+await checkAsync('pve_permissions reads the map and falls back for the per-user view', async () => {
+  const tool = byName(accessExtra, 'pve_permissions');
+  const list = await tool.execute({ action: 'list' }, {});
+  assert.ok(list.permissions['/']);
+  const user = await tool.execute({ action: 'user', userid: 'root@pam' }, {});
+  assert.ok(user.permissions['/']);
+  assert.match(user.note, /does not exist/);
+});
+
+await checkAsync('pve_password gates the change and never echoes the password', async () => {
+  const tool = byName(accessExtra, 'pve_password');
+  seen.length = 0;
+  const first = await tool.execute({ userid: 'root@pam', password: 'new-secret-123' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  assert.equal(seen.length, 0);
+  const out = await tool.execute({ userid: 'root@pam', password: 'new-secret-123', confirm: first.confirm }, {});
+  assert.equal(out.changed, true);
+  assert.equal(JSON.stringify(out).includes('new-secret-123'), false);
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path === '/api2/json/access/password');
+  assert.equal(JSON.parse(put.body).password, 'new-secret-123');
+});
+
+await checkAsync('pve_token_rotate gates rotation, sends regenerate=1 and returns the new secret', async () => {
+  const tool = byName(accessExtra, 'pve_token_rotate');
+  seen.length = 0;
+  const first = await tool.execute({ userid: 'root@pam', tokenid: 'dsh-rotate' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  const out = await tool.execute({ userid: 'root@pam', tokenid: 'dsh-rotate', confirm: first.confirm }, {});
+  assert.equal(out.secret, 'new-secret-value');
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/token/dsh-rotate'));
+  assert.equal(JSON.parse(put.body).regenerate, 1);
+});
+
+await checkAsync('pve_security_group lists, gates create and gates rule-add', async () => {
+  const tool = byName(firewallExtra, 'pve_security_group');
+  const list = await tool.execute({ action: 'list' }, {});
+  assert.equal(list.groups[0].group, 'web');
+  seen.length = 0;
+  const first = await tool.execute({ action: 'create', group: 'web2' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'create', group: 'web2', confirm: first.confirm }, {});
+  assert.ok(seen.some((entry) => entry.method === 'POST' && entry.path === '/api2/json/cluster/firewall/groups'));
+  const ruleFirst = await tool.execute({ action: 'rule-add', group: 'web', rule_action: 'ACCEPT', rule_type: 'in', proto: 'tcp', dport: '22' }, {});
+  assert.equal(ruleFirst.status, 'confirmation-required');
+  await tool.execute({ action: 'rule-add', group: 'web', rule_action: 'ACCEPT', rule_type: 'in', proto: 'tcp', dport: '22', confirm: ruleFirst.confirm }, {});
+  const rule = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/cluster/firewall/groups/web');
+  assert.equal(JSON.parse(rule.body).action, 'ACCEPT');
+  assert.equal(JSON.parse(rule.body).type, 'in');
+});
+
+await checkAsync('pve_ipset lists, gates create and gates entry-add', async () => {
+  const tool = byName(firewallExtra, 'pve_ipset');
+  const list = await tool.execute({ action: 'list' }, {});
+  assert.equal(list.sets[0].name, 'blocked');
+  const first = await tool.execute({ action: 'create', name: 'blocked2' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'create', name: 'blocked2', confirm: first.confirm }, {});
+  const entryFirst = await tool.execute({ action: 'entry-add', name: 'blocked', cidr: '10.1.0.0/16' }, {});
+  assert.equal(entryFirst.status, 'confirmation-required');
+  await tool.execute({ action: 'entry-add', name: 'blocked', cidr: '10.1.0.0/16', confirm: entryFirst.confirm }, {});
+  const entry = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/cluster/firewall/ipset/blocked');
+  assert.equal(JSON.parse(entry.body).cidr, '10.1.0.0/16');
+});
+
+await checkAsync('pve_alias lists and gates create', async () => {
+  const tool = byName(firewallExtra, 'pve_alias');
+  const list = await tool.execute({ action: 'list' }, {});
+  assert.equal(list.aliases[0].name, 'dns');
+  const first = await tool.execute({ action: 'create', name: 'dns2', cidr: '9.9.9.9' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'create', name: 'dns2', cidr: '9.9.9.9', confirm: first.confirm }, {});
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path === '/api2/json/cluster/firewall/aliases');
+  assert.deepEqual(JSON.parse(post.body), { name: 'dns2', cidr: '9.9.9.9' });
+});
+
+await checkAsync('pve_firewall_extra reads options/log/refs and gates options-set', async () => {
+  const tool = byName(firewallExtra, 'pve_firewall_extra');
+  const options = await tool.execute({ action: 'options' }, {});
+  assert.equal(options.options.policy_in, 'DROP');
+  const log = await tool.execute({ action: 'log' }, {});
+  assert.equal(log.log.length, 1);
+  const refs = await tool.execute({ action: 'refs' }, {});
+  assert.ok(refs.refs.alias);
+  seen.length = 0;
+  const first = await tool.execute({ action: 'options-set', changes: ['enable=1'] }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'options-set', changes: ['enable=1'], confirm: first.confirm }, {});
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path === '/api2/json/cluster/firewall/options');
+  assert.deepEqual(JSON.parse(put.body), { enable: '1' });
+});
+
+await checkAsync('pve_certificate reads info and gates upload', async () => {
+  const tool = byName(monitorExtra, 'pve_certificate');
+  const info = await tool.execute({ action: 'info' }, {});
+  assert.equal(info.certificates[0].filename, 'pveproxy-ssl.pem');
+  const pem = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n';
+  seen.length = 0;
+  const first = await tool.execute({ action: 'upload', certificates: pem }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'upload', certificates: pem, confirm: first.confirm }, {});
+  const post = seen.find((entry) => entry.method === 'POST' && entry.path.endsWith('/certificates/custom'));
+  assert.equal(JSON.parse(post.body).certificates, pem);
+});
+
+await checkAsync('pve_subscription reads, gates set and gates delete', async () => {
+  const tool = byName(monitorExtra, 'pve_subscription');
+  const sub = await tool.execute({ action: 'get' }, {});
+  assert.equal(sub.subscription.status, 'Active');
+  const first = await tool.execute({ action: 'set', key: 'pve8c-0123456789' }, {});
+  assert.equal(first.status, 'confirmation-required');
+  await tool.execute({ action: 'set', key: 'pve8c-0123456789', confirm: first.confirm }, {});
+  const put = seen.find((entry) => entry.method === 'PUT' && entry.path.endsWith('/subscription'));
+  assert.deepEqual(JSON.parse(put.body), { key: 'pve8c-0123456789' });
+  const deleteFirst = await tool.execute({ action: 'delete' }, {});
+  assert.equal(deleteFirst.status, 'confirmation-required');
+  await tool.execute({ action: 'delete', confirm: deleteFirst.confirm }, {});
+  assert.ok(seen.some((entry) => entry.method === 'DELETE' && entry.path.endsWith('/subscription')));
+});
+
+await checkAsync('pve_notifications reports the API as unavailable on 7.4 instead of failing', async () => {
+  const tool = byName(monitorExtra, 'pve_notifications');
+  const out = await tool.execute({}, {});
+  assert.equal(out.available, false);
+  assert.match(out.note, /not available on this PVE version/);
 });
 
 controller.closeAll();
