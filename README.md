@@ -356,6 +356,41 @@ point only the `-admin` card at it. A denied API call now says so instead of ret
 `permission denied — the token's role does not grant this path (Permissions.Modify manages access;
 VM.* and Datastore.* cover guests and storage)`.
 
+### Network changes that can lock you out
+
+| Tool | Parameters | What it does |
+|---|---|---|
+| `node_network` | `action` = `list` \| `create` \| `update` \| `delete` \| `apply`, `iface?`, plus interface fields (`type`, `address`, `cidr`, `netmask`, `gateway`, `bridge_ports`, `bridge_stp`, `bond_mode`, `slaves`, `mtu`, `vlan_id`, …), `timeout_sec?`, `confirm?` | Interfaces of the node. `create` and `update` only write `/etc/network/interfaces.new` — nothing takes effect until `apply`. |
+
+A wrong network change is the one failure this plugin cannot talk its way out of: the node stays up,
+but the address you are talking to it on is gone, so the answer to "did it work" never arrives and the
+next call fails at the TCP level. `apply` therefore goes through three layers:
+
+1. **Inventory first.** `list` shows the current interfaces, the pending file (if any), and which
+   interface carries the management address (the API URL's host) — the one to be careful with.
+2. **The confirmation token.** The first `apply` changes nothing; it returns the token together with a
+   summary that names the pending interfaces and the management interface.
+3. **A rollback timer that outlives this call.** Before applying, the plugin copies
+   `/etc/network/interfaces` and `/etc/network/interfaces.new` to
+   `/var/lib/dsh-pve-vm/rollback/<unit>/` on the node and arms a detached
+   `systemd-run --on-active=<N>s` unit that restores them and runs `ifreload -a`. After the confirmed
+   `apply` it probes the API. If the node answers, the timer is cancelled; if it does not, the timer
+   stays armed and the answer says so. Worst case is two or three minutes of downtime, not a keyboard.
+
+Because the probe is an API call and the timer is armed over ssh, `apply` needs an instance with both
+`apiUrl`/`apiToken` and `sshHost`; without one it refuses with that sentence instead of trying.
+
+### The firewall, with a way back
+
+| Tool | Parameters | What it does |
+|---|---|---|
+| `pve_firewall` | `scope` = `cluster` \| `node` \| `guest`, `action` = `status` \| `enable` \| `disable` \| `policy` \| `rule-list` \| `rule-add` \| `rule-update` \| `rule-delete`, `vmid?` (guest scope), `rule_action`? (`ACCEPT`/`DROP`/`REJECT`), `rule_type`?, `dport`?, `sport`?, `source`?, `dest`?, `proto`?, `pos`?, `confirm?` | Firewall options and rules at cluster, node or guest level. Every write needs a token; cluster/node writes also arm the rollback timer. |
+
+`status` counts the management ports (**8006** and **22**) that have no `ACCEPT` input rule, and
+`enable` warns when the count is not zero: enabling a DROP policy without an allow rule for the plugin's
+own traffic cuts the plugin off. Cluster and node writes copy `cluster.fw` / `host.fw` aside, arm the
+same timer with `pve-firewall restart`, apply and probe; guest-level rules are plain writes.
+
 ### Dangerous operations need a second confirmation
 
 A dangerous call does **nothing** on its first invocation. It returns

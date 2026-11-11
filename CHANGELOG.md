@@ -3,6 +3,28 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.9.0] — 2026-11-11
+
+### Added
+
+- `node_network` — list, create, update, delete and apply the node's network configuration. Changes
+  are staged in `/etc/network/interfaces.new`; `apply` is the only action that touches the running
+  system.
+- `pve_firewall` — cluster, node and guest scopes: status, enable/disable, default policy and rules.
+  `status` names the management ports (8006, 22) that have no ACCEPT rule.
+- Commit-confirm for both: before a change that can cut access, the previous files are copied to
+  `/var/lib/dsh-pve-vm/rollback/<unit>/` and a detached `systemd-run --on-active=<N>s` unit restores
+  them and reloads (`ifreload -a`, `pve-firewall restart`). The timer is cancelled once the API answers
+  again; otherwise it fires and the node comes back by itself.
+- `lib/netguard.js` — the arming/cancelling/probing primitives, with unit and path validation.
+- README: "Network changes that can lock you out" and "The firewall, with a way back".
+
+### Fixed
+
+- A kept-alive API socket closed by the node between two calls made the next GET fail with
+  `socket hang up`. Idempotent GETs are now retried once on a fresh agent; mutating verbs are not
+  retried, because the node may have applied them before the connection broke.
+
 ## [0.8.2] — 2026-11-11
 
 ### Fixed

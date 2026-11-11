@@ -28,6 +28,8 @@ import { backupJobTools } from './tools/backup-jobs.js';
 import { lxcTools } from './tools/lxc.js';
 import { poolTools } from './tools/pools.js';
 import { accessTools } from './tools/access.js';
+import { networkTools } from './tools/network.js';
+import { firewallTools } from './tools/firewall.js';
 
 export { Config };
 export const name = 'pve-vm';
@@ -68,6 +70,8 @@ export function apply(ctx, config) {
     ...lxcTools(deps),
     ...poolTools(deps),
     ...accessTools(deps),
+    ...networkTools(deps),
+    ...firewallTools(deps),
   ];
   for (const tool of tools) ctx.tools.register(tool);
 
