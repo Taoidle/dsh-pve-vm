@@ -13,8 +13,16 @@ import { Config, resolveSettings, snapshot } from './lib/config.js';
 import { ControllerPool } from './lib/pool.js';
 import { ConsoleView } from './lib/view.js';
 import { registerViewRoutes } from './lib/routes.js';
+import { createPanelActions } from './lib/panels.js';
+import { ConfirmationStore } from './lib/confirm.js';
 import { consoleTools } from './tools/console.js';
 import { guestTools } from './tools/guest.js';
+import { lifecycleTools } from './tools/lifecycle.js';
+import { snapshotTools } from './tools/snapshot.js';
+import { storageTools } from './tools/storage.js';
+import { nodeTools } from './tools/node.js';
+import { clusterTools } from './tools/cluster.js';
+import { backupTools } from './tools/backup.js';
 
 export { Config };
 export const name = 'pve-vm';
@@ -37,15 +45,29 @@ export function apply(ctx, config) {
   });
   ctx.effect(() => () => pool.closeAll());
 
-  const deps = { pool, settings, attachments: ctx.attachments };
-  for (const tool of [...consoleTools(deps), ...guestTools(deps)]) ctx.tools.register(tool);
+  // Dangerous operations (power off, destroy, resize, apt upgrade …) are
+  // confirmed with a token: the first call changes nothing and returns it.
+  const confirms = new ConfirmationStore();
+  const deps = { pool, settings, attachments: ctx.attachments, confirms };
+  const tools = [
+    ...consoleTools(deps),
+    ...guestTools(deps),
+    ...lifecycleTools(deps),
+    ...snapshotTools(deps),
+    ...storageTools(deps),
+    ...nodeTools(deps),
+    ...clusterTools(deps),
+    ...backupTools(deps),
+  ];
+  for (const tool of tools) ctx.tools.register(tool);
 
   // Observation panel: the client half pulls frames from these routes. A
   // composition may have no web server at all (headless profile) — then there is
   // simply no panel while the tools keep working, so the dependency is declared
   // through ctx.inject instead of the plugin's mandatory `inject` list.
   const view = new ConsoleView({ pool, settings });
-  ctx.inject(['webServer'], (scoped) => registerViewRoutes(scoped.webServer, { view }));
+  const actions = createPanelActions({ pool, confirms });
+  ctx.inject(['webServer'], (scoped) => registerViewRoutes(scoped.webServer, { view, actions }));
 
   // The computer-use slot is per composition: if another provider has already taken it,
   // the plugin tools still work, so the error is only recorded.

@@ -3,6 +3,35 @@
 All notable changes to this plugin are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.4.0] — 2026-11-11
+
+### Added
+
+* **VM lifecycle.** `vm_power` (start / shutdown / stop / reboot / reset / suspend / resume),
+  `vm_create` and `vm_destroy`. Shutdown is ACPI with a timeout; stop and reset do not ask the guest.
+* **Snapshots and configuration.** `vm_snapshot` (list / create / delete / rollback) and `vm_config`
+  (get / pending / set, including deleting a key).
+* **Storage.** `vm_disk` (list / rescan / trim / resize / move / attach-iso / detach-iso) and
+  `node_storage`.
+* **Node administration.** `node_status` (overview / apt / services / tasks / syslog / network),
+  `node_apt` (update / upgrade), `node_service` and `node_task` — all over `pvesh`, still without a
+  PVE API token.
+* **Cluster awareness.** `cluster_status` (status / resources / nodes / nextid / ha). `pvesh` also
+  resolves the node name from `hostname -s`, so a VM can be found without hard-coding the node.
+* **Everything else, guarded.** `pve_api` for the long tail of the Proxmox API, plus `vm_backup`
+  (vzdump list / start / restore), `vm_clone` and `vm_migrate`.
+* **A second confirmation for dangerous operations.** The first call performs nothing and returns a
+  token bound to the action and the target; repeating the call with `confirm: "<token>"` within three
+  minutes performs it. A token works once, and a token issued for another VM or action is refused
+  with `CONFIRM_MISMATCH`.
+* The right-sidebar panel gained power buttons (start / shut down / stop / reset) with the same
+  confirmation step for the dangerous two.
+
+### Changed
+
+* `node_status action: overview` is trimmed to uptime, load, memory, rootfs and the PVE/kernel
+  versions — the raw status carries every CPU flag in one very long string.
+
 ## [0.3.5] — 2026-11-11
 
 ### Fixed

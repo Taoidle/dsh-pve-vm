@@ -120,6 +120,15 @@ window.__ModuleLoader__.load({
         'view.play': 'смотреть',
         'view.snap': 'кадр сейчас',
         'view.release': 'отключить консоль',
+        'view.power': 'питание',
+        'view.powerStart': 'включить',
+        'view.powerShutdown': 'выключить (ACPI)',
+        'view.powerStop': 'жёсткое выключение',
+        'view.powerReset': 'сброс',
+        'view.confirmPower': 'Подтвердить',
+        'view.cancelPower': 'Отмена',
+        'view.powerDone': 'Питание: {action} — готово',
+        'view.powerFailed': 'Не удалось: {message}',
         'view.released': 'сессия консоли закрыта',
         'view.releaseFailed': 'закрыть сессию не удалось',
         'view.fps': 'кадров/с',
@@ -225,6 +234,15 @@ window.__ModuleLoader__.load({
         'view.play': 'watch',
         'view.snap': 'frame now',
         'view.release': 'disconnect console',
+        'view.power': 'power',
+        'view.powerStart': 'power on',
+        'view.powerShutdown': 'shut down (ACPI)',
+        'view.powerStop': 'hard power off',
+        'view.powerReset': 'reset',
+        'view.confirmPower': 'Confirm',
+        'view.cancelPower': 'Cancel',
+        'view.powerDone': 'Power: {action} done',
+        'view.powerFailed': 'Failed: {message}',
         'view.released': 'console session closed',
         'view.releaseFailed': 'could not close the session',
         'view.fps': 'frames/s',
@@ -328,6 +346,15 @@ window.__ModuleLoader__.load({
         'view.play': '观看',
         'view.snap': '立即截取画面',
         'view.release': '断开控制台',
+        'view.power': '电源',
+        'view.powerStart': '开机',
+        'view.powerShutdown': '关机（ACPI）',
+        'view.powerStop': '强制断电',
+        'view.powerReset': '重置',
+        'view.confirmPower': '确认执行',
+        'view.cancelPower': '取消',
+        'view.powerDone': '电源：{action} 已完成',
+        'view.powerFailed': '失败：{message}',
         'view.released': '控制台会话已关闭',
         'view.releaseFailed': '无法关闭会话',
         'view.fps': '帧/秒',
@@ -432,6 +459,8 @@ window.__ModuleLoader__.load({
 .pve-vm-edit-label { font-size: 12.5px; padding-top: 7px; }
 .pve-vm-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pve-vm-tools .pve-vm-select { width: auto; }
+.pve-vm-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--dsh-border-warn, #8a6d1f); border-radius: 8px; }
+.pve-vm-confirm .pve-vm-warn { flex-basis: 100%; }
 `;
 
     /** Add the card styles once. */
@@ -1037,6 +1066,8 @@ window.__ModuleLoader__.load({
       const [frame, setFrame] = React.useState(null);
       const [frameError, setFrameError] = React.useState(null);
       const [note, setNote] = React.useState(null);
+      const [powerNote, setPowerNote] = React.useState(null);
+      const [pendingPower, setPendingPower] = React.useState(null);
       const [tick, setTick] = React.useState(0);
       const frameUrl = React.useRef(null);
       const [, setLocaleTick] = React.useState(0);
@@ -1160,6 +1191,48 @@ window.__ModuleLoader__.load({
         setTimeout(() => setNote(null), 2500);
       };
 
+      /**
+       * Run one power action. A dangerous one answers with a confirmation
+       * request instead of performing it; the same button then carries the token.
+       */
+      const runPower = async (action, confirm) => {
+        if (vmid === null) return;
+        try {
+          const response = await fetch(`${VIEW_BASE}/action`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ vmid, action, instance: instanceEff, ...(confirm ? { confirm } : {}) }),
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
+          if (body.status === 'confirmation-required') {
+            setPendingPower({ action, token: body.confirm, summary: body.summary });
+            setPowerNote(null);
+            return;
+          }
+          setPendingPower(null);
+          setPowerNote(t('view.powerDone', { action }));
+          setTick((value) => value + 1);
+          setTimeout(() => setPowerNote(null), 3000);
+        } catch (error) {
+          setPowerNote(t('view.powerFailed', { message: String(error?.message ?? error) }));
+        }
+      };
+
+      const powerButtons = ['start', 'shutdown', 'stop', 'reset'].map((action) =>
+        jsx(
+          Button,
+          {
+            variant: 'ghost',
+            size: 'sm',
+            disabled: vmid === null,
+            children: t(`view.power${action.charAt(0).toUpperCase()}${action.slice(1)}`),
+            onClick: () => runPower(action),
+          },
+          action,
+        ),
+      );
+
       const chips = allowed.map((id) =>
         jsx(
           'button',
@@ -1255,9 +1328,32 @@ window.__ModuleLoader__.load({
           }),
           status === null ? null : jsx('div', { className: 'pve-vm-line', children: status }),
           ...banners,
+          pendingPower === null
+            ? null
+            : jsxs('div', {
+                className: 'pve-vm-confirm',
+                children: [
+                  jsx('div', { className: 'pve-vm-warn', children: pendingPower.summary }),
+                  jsx(Button, {
+                    variant: 'primary',
+                    size: 'sm',
+                    children: t('view.confirmPower'),
+                    onClick: () => runPower(pendingPower.action, pendingPower.token),
+                  }),
+                  jsx(Button, {
+                    variant: 'ghost',
+                    size: 'sm',
+                    children: t('view.cancelPower'),
+                    onClick: () => setPendingPower(null),
+                  }),
+                ],
+              }),
           jsxs('div', {
             className: 'pve-vm-tools',
             children: [
+              jsx('span', { className: 'pve-vm-line', children: t('view.power') }),
+              ...powerButtons,
+              powerNote === null ? null : jsx('span', { className: 'pve-vm-line', children: powerNote }),
               jsx(Button, {
                 variant: 'outline',
                 size: 'sm',

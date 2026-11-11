@@ -205,6 +205,44 @@ Every action tool accepts a common tail: `observe` (return a frame after the act
 | `vm_type_text` | `vmid`, `text`, `settleMs?`, `observe?` | Type text through the best available channel: ASCII → console, non-ASCII → the user session on Windows / `xdotool`–`wtype` on Linux. |
 | `vm_status` | `vmid?` | Is the VM allowed, does the agent answer, which OS, are there open console sessions. |
 
+### Lifecycle, snapshots, storage, node and cluster
+
+These go through `qm` and `pvesh` on the node over the same ssh transport as everything else — the
+plugin still needs no PVE API token.
+
+| Tool | Parameters | What it does |
+|---|---|---|
+| `vm_power` | `vmid`, `action` = `start` \| `shutdown` \| `stop` \| `reboot` \| `reset` \| `suspend` \| `resume`, `timeoutSec?`, `confirm?` | Power state. `shutdown` asks the guest (ACPI) and waits up to `timeoutSec` (default 60); `stop` and `reset` do not. Answer carries the `qm status` afterwards. |
+| `vm_create` | `vmid?`, `name?`, `memory?`, `cores?`, `ostype?`, `disk?`, `net?`, `iso?`, `start?` | Create a VM; the id defaults to `/cluster/nextid`. |
+| `vm_destroy` | `vmid`, `purge?`, `confirm?` | Delete the VM and its disks. `purge` also removes the backup/job references. |
+| `vm_snapshot` | `vmid`, `action` = `list` \| `create` \| `delete` \| `rollback`, `name?`, `description?`, `confirm?` | Snapshot management; `list` reads `/nodes/<node>/qemu/<id>/snapshot`. |
+| `vm_config` | `vmid`, `action` = `get` \| `pending` \| `set`, `settings?: ["key=value"]`, `confirm?` | Read or change the VM configuration (`qm set`; a bare `key` deletes it). |
+| `vm_disk` | `vmid`, `action` = `list` \| `rescan` \| `trim` \| `resize` \| `move` \| `attach-iso` \| `detach-iso`, `slot?`, `size?`, `storage?`, `iso?`, `deleteSource?`, `confirm?` | Disks and the ISO drive. `list` shows every `ideN\|sataN\|scsiN\|virtioN` slot with its current value. |
+| `node_storage` | — | The node's storage list (type, content, free space). |
+| `node_status` | `action` = `overview` \| `apt` \| `services` \| `tasks` \| `syslog` \| `network`, `limit?` | Node read-only views. `overview` is trimmed to uptime, load, memory/rootfs, PVE and kernel version. |
+| `node_apt` | `action` = `update` \| `upgrade`, `reboot?`, `confirm?` | Refresh the package lists, or install the pending upgrades (a task; answers with its UPID). |
+| `node_service` | `action` = `list` \| `start` \| `stop` \| `restart` \| `reload`, `name?`, `confirm?` | Node services (`pveproxy`, `pvedaemon`, …). |
+| `node_task` | `upid`, `action` = `status` \| `log` \| `stop`, `confirm?` | Follow or stop a task by UPID (apt upgrade, backup, migration). |
+| `cluster_status` | `action` = `status` \| `resources` \| `nodes` \| `nextid` \| `ha` | Cluster view; this is also how the plugin finds which node owns a VM. |
+| `pve_api` | `method` = `get` \| `create` \| `set` \| `delete`, `path`, `params?: ["k=v"]`, `confirm?` | Escape hatch for anything the typed tools do not cover. Reads run directly; writes go through the confirmation flow. |
+| `vm_backup` | `action` = `list` \| `start` \| `restore`, `vmid?`, `storage?`, `mode?`, `archive?`, `confirm?` | `vzdump` tasks and `qmrestore`. |
+| `vm_clone` | `vmid`, `newid?`, `name?`, `full?`, `target?` | Clone a VM (full or linked). |
+| `vm_migrate` | `vmid`, `target`, `online?`, `withLocalDisks?`, `confirm?` | Move a VM to another cluster node. |
+
+### Dangerous operations need a second confirmation
+
+A dangerous call does **nothing** on its first invocation. It returns
+`{"status":"confirmation-required","performed":false,"summary":"…","confirm":"<token>","expiresAt":"…"}`,
+and the operation only runs when the same tool is called again with
+`confirm: "<token>"` within three minutes. The token is bound to the action and the target, works
+exactly once, and is refused with `CONFIRM_MISMATCH` when it was issued for another VM or another
+action. Risks are `danger` (stop, shutdown, reboot, suspend, resize, move, restart a service, an
+upgrade) and `destroy` (reset, destroy, rollback, restore, migrate, deleting a snapshot, …).
+
+The panel's power buttons use the same mechanism: 强制断电 / 重置 answer with a confirmation bar
+(确认执行 / 取消) instead of acting immediately, so the agent and the panel can never disagree about
+what needs a second look.
+
 ## Watch the VM screen live
 
 The **VM screen** tab in the right sidebar shows what the agent sees while it works. Add it from the
@@ -216,8 +254,10 @@ sidebar guide, or let `viewAutoOpen` reveal it the moment the agent touches a co
 * `viewFollowAgent` keeps the panel on the VM the agent is working with; clicking a VM chip pins the
   panel to that VM instead. `viewFps` (1–4) and `viewScale` (1 / 2 / 4) control the pace and the
   resolution, and both can be changed on the fly inside the panel.
-* The panel is **watch-only**: no clicks, no typing, nothing is injected into the guest. A blank
-  frame is called out explicitly — the guest blanked its display or is locked.
+* The panel only **watches the guest** — no clicks, no typing, nothing is injected into the guest.
+  It does control the *machine*, though: start / shut down / stop / reset live in the panel, and the
+  dangerous ones ask for a second click. A blank frame is called out explicitly — the guest blanked
+  its display or is locked.
 * Frames are served by the plugin's own routes (`/pve-vm/console/frame`, `/state`, `/release`) on the
   harness web server, behind a loopback-only fence: a request is answered only when the `Host` is
   loopback (`localhost`, `127.0.0.0/8`, `[::1]`), a present `Origin` matches `Host`, and
